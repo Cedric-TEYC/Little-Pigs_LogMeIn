@@ -36,7 +36,7 @@ jobs:
 
       - name: 🐍 Bandit - Python security linter
         id: bandit
-        uses: tj-actions/bandit@v6
+        uses: tj-actions/bandit@v5
         with:
           path: backend/
           output: bandit-result.txt
