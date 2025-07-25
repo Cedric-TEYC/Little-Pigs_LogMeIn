@@ -1,18 +1,99 @@
-name: Build & Push Docker Images
+name: Full DevSecOps CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  security-events: write
 
 env:
   DOCKER_BUILDKIT: 1
 
 jobs:
-  build-and-push:
+  security:
+    name: 🛡️ Security & Quality (Trivy, Bandit, Flake8)
     runs-on: ubuntu-latest
+    outputs:
+      summary: ${{ steps.summary.outputs.summary }}
     steps:
-      - name: Checkout repository
+      - name: 📦 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🧪 Trivy filesystem scan (code, deps, secrets)
+        id: trivy-fs
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: 0   # on ne bloque pas ici, juste summary
+          output: trivy-fs.txt
+
+      - name: 🐍 Bandit - Python security linter
+        id: bandit
+        uses: tj-actions/bandit@v6
+        with:
+          path: backend/
+          output: bandit-result.txt
+
+      - name: 🔎 Flake8 - Python linter
+        id: flake8
+        uses: py-actions/flake8@v2
+        with:
+          path: backend/
+          output: flake8-report.txt
+
+      # Générer un résumé (summary) avec un script JS GitHub Actions
+      - name: 📝 Generate summary report
+        id: summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let trivy = fs.existsSync('trivy-fs.txt') ? fs.readFileSync('trivy-fs.txt', 'utf-8') : '';
+            let bandit = fs.existsSync('bandit-result.txt') ? fs.readFileSync('bandit-result.txt', 'utf-8') : '';
+            let flake8 = fs.existsSync('flake8-report.txt') ? fs.readFileSync('flake8-report.txt', 'utf-8') : '';
+            let summary = "## Résumé sécurité & qualité\n";
+            summary += "### Trivy (FS)\n" + (trivy || "Aucun résultat") + "\n";
+            summary += "### Bandit\n" + (bandit || "Aucun résultat") + "\n";
+            summary += "### Flake8\n" + (flake8 || "Aucun résultat") + "\n";
+            core.setOutput('summary', summary);
+            core.summary.addRaw(summary).write();
+
+  test:
+    name: 🧪 Pytest (unit tests)
+    runs-on: ubuntu-latest
+    needs: security
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt
+      - name: Run pytest
+        run: |
+          pytest backend/tests || true   # Ne bloque pas, juste pour reporting
+      - name: Upload pytest results
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: backend/tests/
+
+  build_scan_push:
+    name: 🚀 Build, Scan & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [security, test]
+    steps:
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Login to DockerHub
@@ -21,18 +102,43 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & Push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: cedricteyc/littlepigs-backend:latest
+      # BACKEND IMAGE
+      - name: Build backend image
+        run: docker build -t cedricteyc/littlepigs-backend:${{ github.sha }} -t cedricteyc/littlepigs-backend:latest ./backend
 
-      - name: Build & Push frontend image
-        uses: docker/build-push-action@v5
+      - name: Trivy scan backend image
+        uses: aquasecurity/trivy-action@master
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: cedricteyc/littlepigs-frontend:latest
+          image-ref: "cedricteyc/littlepigs-backend:${{ github.sha }}"
+          format: sarif
+          output: "trivy-backend.sarif"
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: Upload backend scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-backend.sarif"
+
+      - name: Push backend image
+        run: docker push cedricteyc/littlepigs-backend:${{ github.sha }} && docker push cedricteyc/littlepigs-backend:latest
+
+      # FRONTEND IMAGE
+      - name: Build frontend image
+        run: docker build -t cedricteyc/littlepigs-frontend:${{ github.sha }} -t cedricteyc/littlepigs-frontend:latest ./frontend
+
+      - name: Trivy scan frontend image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "cedricteyc/littlepigs-frontend:${{ github.sha }}"
+          format: sarif
+          output: "trivy-frontend.sarif"
+          severity: CRITICAL,HIGH,MEDIUM
+
+      - name: Upload frontend scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-frontend.sarif"
+
+      - name: Push frontend image
+        run: docker push cedricteyc/littlepigs-frontend:${{ github.sha }} && docker push cedricteyc/littlepigs-frontend:latest
+
