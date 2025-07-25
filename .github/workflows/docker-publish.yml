@@ -126,3 +126,4 @@ jobs:
           echo "- $DOCKERHUB_USERNAME/littlepigs-frontend:latest" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Pour plus d'infos sécurité, voir l’onglet Security du repo GitHub." >> $GITHUB_STEP_SUMMARY
+#
