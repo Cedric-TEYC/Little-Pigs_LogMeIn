@@ -67,7 +67,7 @@ Ce site a été conçu et développé par **Axis Architecture**.
 
 ## Questions ou support
 
-Contactez : contact.axis.architecture@gmail.com
+Contact : contact.axis.architecture@gmail.com
 
 ---
 
