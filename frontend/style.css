@@ -1,0 +1,121 @@
+body {
+    background: #f6f8fb;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0;
+}
+
+.dashboard-container {
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 32px 30px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 0 24px 2px #dde2f6;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 22px;
+}
+
+.dashboard-title {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: #24335A;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dashboard-actions .btn {
+    margin-left: 15px;
+    padding: 8px 20px;
+    border-radius: 7px;
+    border: none;
+    font-size: 1.02rem;
+    font-weight: 600;
+    cursor: pointer;
+    background: #24335A;
+    color: #fff;
+    transition: 0.16s;
+}
+.dashboard-actions .btn.testlog { background: #327af7; }
+.dashboard-actions .btn.details { background: #373E48; }
+.dashboard-actions .btn.clear { background: #e94444; }
+
+.dashboard-actions .btn:hover {
+    filter: brightness(1.07);
+}
+
+.dashboard-stats {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 28px;
+    justify-content: center;
+}
+
+.stat-card {
+    flex: 1;
+    padding: 24px 0 10px 0;
+    background: #f7f8fc;
+    border-radius: 11px;
+    text-align: center;
+    box-shadow: 0 1px 8px #f1f2f7;
+}
+
+.stat-title {
+    font-size: 1.02rem;
+    color: #556083;
+    font-weight: 600;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+}
+
+.stat-value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #202a44;
+}
+
+.dashboard-logs {
+    margin-top: 18px;
+}
+
+.logs-area {
+    width: 100%;
+    min-height: 140px;
+    background: #f3f6fd;
+    border-radius: 10px;
+    padding: 18px 12px;
+    box-shadow: 0 1px 3px #e3e7f3;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 1.06rem;
+}
+
+.log-line {
+    margin-bottom: 18px;
+    word-break: break-all;
+}
+.log-level {
+    color: #3c486b;
+    font-weight: bold;
+}
+.log-ua {
+    color: #6c757d;
+    font-size: 0.96em;
+    display: block;
+    word-break: break-all;
+    margin-top: 2px;
+    white-space: pre-line; /* Le wrap ultime, même sur les points, les slashes, etc. */
+    max-width: 98%;
+    overflow-wrap: break-word;
+}
+.log-ip {
+    color: #7d869a;
+    font-size: 0.95em;
+    margin-top: 3px;
+    display: inline-block;
+}
+

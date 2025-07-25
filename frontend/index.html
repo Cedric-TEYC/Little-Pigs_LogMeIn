@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>LogMeIn - Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <div class="dashboard-title">
+                <img src="https://img.icons8.com/color/48/000000/combo-chart.png" style="vertical-align: middle;">
+                <span>LogMeIn - Dashboard</span>
+            </div>
+            <div class="dashboard-actions">
+                <button id="testLogBtn" class="btn testlog">Test Log</button>
+                <button id="showDetailsBtn" class="btn details"><span>&#128065;</span> Afficher logs détaillés</button>
+                <button id="clearLogsBtn" class="btn clear"><span>&#128465;</span> Vider</button>
+            </div>
+        </div>
+
+        <div class="dashboard-stats">
+            <div class="stat-card">
+                <div class="stat-title">TOTAL LOGS</div>
+                <div id="log-count" class="stat-value">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">DERNIER LOG</div>
+                <div id="last-log" class="stat-value">-</div>
+            </div>
+        </div>
+
+        <div class="dashboard-logs">
+            <pre id="logs" class="logs-area"></pre>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
