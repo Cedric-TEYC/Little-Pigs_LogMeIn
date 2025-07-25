@@ -12,25 +12,31 @@ permissions:
 
 jobs:
   security_quality:
-    name: Security & Quality (Trivy, Bandit, Flake8)
+    name: Security & Quality (Trivy CLI, Bandit, Flake8)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@main
-        with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "table"
-          severity: "CRITICAL,HIGH"
+      # Install Trivy CLI
+      - name: Install Trivy
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.50.2_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
 
+      # Trivy scan code (filesystem)
+      - name: Trivy scan codebase (SCA + vuln + secrets)
+        run: |
+          trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
+
+      # Bandit Python SAST
       - name: Bandit security scan (Python)
         uses: tj-actions/bandit@v5
         with:
           targets: "./backend"
 
+      # Flake8 Python linter
       - name: Flake8 linter
         uses: py-actions/flake8@v2
         with:
@@ -52,7 +58,7 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest
       - name: Run pytest
-        run: pytest backend/tests || true  # Retire || true si tu veux que ça bloque sur test fail
+        run: pytest backend/tests || true
 
   build_docker:
     name: Build, Scan & Push Docker Images
@@ -81,20 +87,12 @@ jobs:
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
 
       - name: Trivy scan backend Docker image
-        uses: aquasecurity/trivy-action@main
-        with:
-          image-ref: "${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest"
-          format: "sarif"
-          output: "trivy-backend.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
+        run: |
+          trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-backend.sarif $DOCKERHUB_USERNAME/littlepigs-backend:latest
 
       - name: Trivy scan frontend Docker image
-        uses: aquasecurity/trivy-action@main
-        with:
-          image-ref: "${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest"
-          format: "sarif"
-          output: "trivy-frontend.sarif"
-          severity: "CRITICAL,HIGH,MEDIUM"
+        run: |
+          trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
 
       - name: Push backend image
         run: docker push $DOCKERHUB_USERNAME/littlepigs-backend:latest
