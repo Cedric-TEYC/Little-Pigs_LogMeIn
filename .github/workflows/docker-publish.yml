@@ -1,18 +1,27 @@
-name: Build & Push Docker Images for Little-Pigs_LogMeIn
+name: Build & Push Docker Images
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
+env:
+  DOCKER_BUILDKIT: 1
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Backend
-      - name: Build and push BACKEND image
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push backend image
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -20,32 +29,10 @@ jobs:
           push: true
           tags: cedricteyc/littlepigs-backend:latest
 
-      # Frontend
-      - name: Build and push FRONTEND image
+      - name: Build & Push frontend image
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
           tags: cedricteyc/littlepigs-frontend:latest
-
-      # (Optionnel) Nginx
-      # - name: Build and push NGINX image
-      #   uses: docker/build-push-action@v5
-      #   with:
-      #     context: ./nginx
-      #     file: ./nginx/Dockerfile
-      #     push: true
-      #     tags: cedricteyc/littlepigs-nginx:latest
-
-    env:
-      DOCKER_BUILDKIT: 1
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-    # Auth Docker Hub (si tu utilises build-push-action, il le fait souvent auto, mais on peut forcer l'auth avant si souci)
-    # - name: Login to DockerHub
-    #   uses: docker/login-action@v3
-    #   with:
-    #     username: ${{ secrets.DOCKERHUB_USERNAME }}
-    #     password: ${{ secrets.DOCKERHUB_TOKEN }}
