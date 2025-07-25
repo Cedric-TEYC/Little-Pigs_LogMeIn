@@ -12,20 +12,19 @@ permissions:
 
 jobs:
   security_quality:
-    name: Security & Quality (Trivy, Bandit, Flake8)
+    name: Security & Quality (Trivy CLI, Bandit, Flake8)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Install Trivy CLI
+      # Install Trivy CLI (for SCA + vuln + secrets scan)
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
 
-      # Trivy scan code (filesystem)
       - name: Trivy scan codebase (SCA + vuln + secrets)
         run: |
           trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
@@ -89,7 +88,6 @@ jobs:
       - name: Build frontend Docker image
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
 
-      # === Réinstaller Trivy ici aussi ===
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
@@ -116,8 +114,19 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-backend.sarif"
+          category: "trivy-backend"
 
       - name: Upload frontend SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-frontend.sarif"
+          category: "trivy-frontend"
+
+      - name: Generate CI Summary
+        if: always()
+        run: |
+          echo '## CI/CD Job Summary' >> $GITHUB_STEP_SUMMARY
+          echo '### Backend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest`' >> $GITHUB_STEP_SUMMARY
+          echo '### Frontend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
+          echo '### Security Scans: Trivy, Bandit, Flake8' >> $GITHUB_STEP_SUMMARY
+          echo 'Badges visible in README. Full reports available in GitHub Security tab.' >> $GITHUB_STEP_SUMMARY
