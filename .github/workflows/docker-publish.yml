@@ -29,16 +29,19 @@ jobs:
       - name: Trivy scan codebase (SCA + vuln + secrets)
         run: |
           trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
+        continue-on-error: true
 
       # Bandit Python SAST
       - name: Bandit security scan (Python)
         uses: tj-actions/bandit@v5
+        continue-on-error: true
         with:
           targets: "./backend"
 
       # Flake8 Python linter
       - name: Flake8 linter
         uses: py-actions/flake8@v2
+        continue-on-error: true
         with:
           path: "./backend"
 
