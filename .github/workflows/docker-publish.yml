@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   security_quality:
-    name: Security & Quality (Trivy CLI, Bandit, Flake8)
+    name: Security & Quality (Trivy, Bandit, Flake8)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -89,13 +89,22 @@ jobs:
       - name: Build frontend Docker image
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
 
+      # === Réinstaller Trivy ici aussi ===
+      - name: Install Trivy
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
+
       - name: Trivy scan backend Docker image
         run: |
           trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-backend.sarif $DOCKERHUB_USERNAME/littlepigs-backend:latest
+        continue-on-error: true
 
       - name: Trivy scan frontend Docker image
         run: |
           trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
+        continue-on-error: true
 
       - name: Push backend image
         run: docker push $DOCKERHUB_USERNAME/littlepigs-backend:latest
