@@ -1,6 +1,6 @@
-[![CI/CD Pipeline](https://github.com/Cedric-TEYC/Little-Pigs_LogMeIn/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Cedric-TEYC/Little-Pigs_LogMeIn/actions)
-[![DockerHub Backend](https://img.shields.io/docker/v/cedricteyc/littlepigs-backend?label=Backend%20DockerHub)](https://hub.docker.com/r/cedricteyc/littlepigs-backend)
-[![DockerHub Frontend](https://img.shields.io/docker/v/cedricteyc/littlepigs-frontend?label=Frontend%20DockerHub)](https://hub.docker.com/r/cedricteyc/littlepigs-frontend)
+![CI/CD](https://github.com/cedricteyc/Little-Pigs_LogMeIn/actions/workflows/docker-publish.yml/badge.svg)
+[![DockerHub Backend](https://img.shields.io/docker/v/cedricteyc/littlepigs-backend?label=backend)](https://hub.docker.com/r/cedricteyc/littlepigs-backend)
+[![DockerHub Frontend](https://img.shields.io/docker/v/cedricteyc/littlepigs-frontend?label=frontend)](https://hub.docker.com/r/cedricteyc/littlepigs-frontend)
 
 # Little-Pigs_LogMeIn
 
@@ -9,6 +9,7 @@
 Little-Pigs_LogMeIn est une application web qui permet d’afficher, centraliser et gérer les logs d’un système via un dashboard simple et moderne.
 Le projet utilise Docker pour tout lancer facilement, sans configuration complexe.
 
+![Negan Little Pig](./negan-the-walking-dead.gif)
 ---
 
 ## Prérequis
