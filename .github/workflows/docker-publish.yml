@@ -130,7 +130,7 @@ jobs:
 
   deploy_cluster:
     name: Deploy Cluster (Docker Swarm)
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: [build_docker]
     env:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
