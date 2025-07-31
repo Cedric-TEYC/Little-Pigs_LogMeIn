@@ -3,13 +3,18 @@ set -e
 
 CLUSTER_CONFIG="cluster_config.yml"
 
-# Récupère toutes les IPs et users des nodes (master + workers)
+# 1. Récupérer IP/user master + arrays pour workers
 MASTER_IP=$(yq e '.nodes.master.ip' $CLUSTER_CONFIG)
 MASTER_USER=$(yq e '.nodes.master.user' $CLUSTER_CONFIG)
 WORKERS_IPS=($(yq e '.nodes.workers[].ip' $CLUSTER_CONFIG))
 WORKERS_USERS=($(yq e '.nodes.workers[].user' $CLUSTER_CONFIG))
 
-# Fonction pour installer yq et Docker sur une machine distante
+# 2. Copie cluster_config.yml et docker-compose.yml sur le master
+echo "Copie des fichiers de conf vers le master..."
+scp -o StrictHostKeyChecking=no "$CLUSTER_CONFIG" "$MASTER_USER@$MASTER_IP:~/"
+scp -o StrictHostKeyChecking=no docker-compose.yml "$MASTER_USER@$MASTER_IP:~/"
+
+# 3. Fonction préparation node (yq + Docker)
 prepare_node() {
   local ip=$1
   local user=$2
@@ -39,13 +44,14 @@ prepare_node() {
   "
 }
 
-# Préparation des nodes (master + workers)
+echo "Préparation du master..."
 prepare_node "$MASTER_IP" "$MASTER_USER"
 for i in "${!WORKERS_IPS[@]}"; do
+  echo "Préparation du worker ${WORKERS_IPS[$i]}..."
   prepare_node "${WORKERS_IPS[$i]}" "${WORKERS_USERS[$i]}"
 done
 
-# Swarm init sur le master
+# 4. Init swarm sur le master
 init_swarm() {
   ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
     if ! sudo docker info | grep 'Swarm: active' &> /dev/null; then
@@ -57,10 +63,10 @@ init_swarm() {
   "
 }
 
-# Ajout des workers
+# 5. Join des workers
 join_workers() {
   ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
-    WORKERS=\$(yq e '.nodes.workers[] | .ip + \" \" + .user' $CLUSTER_CONFIG)
+    WORKERS=\$(yq e '.nodes.workers[] | .ip + \" \" + .user' ~/cluster_config.yml)
     TOKEN=\$(sudo docker swarm join-token worker -q)
     for worker in \$WORKERS; do
       IP=\$(echo \$worker | cut -d' ' -f1)
@@ -70,9 +76,8 @@ join_workers() {
   "
 }
 
-# Déploiement du stack
+# 6. Déploiement du stack sur le master
 deploy_stack() {
-  scp -o StrictHostKeyChecking=no docker-compose.yml "$MASTER_USER@$MASTER_IP:~/"
   ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker stack deploy -c ~/docker-compose.yml littlepigs"
 }
 
