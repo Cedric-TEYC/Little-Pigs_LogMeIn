@@ -1,18 +1,10 @@
 #!/bin/bash
 set -e
 
-# Récupération des variables d'environnement
-MASTER_IP="${MASTER_IP}"
-MASTER_USER="${SSH_USER}"
+CLUSTER_CONFIG="cluster_config.yml"
 
-# Parsing des IPs workers (séparées par des virgules)
-IFS=',' read -r -a WORKERS_IPS <<< "$WORKER_IPS"
-
-# On considère que le SSH_USER est le même pour tous les workers
-WORKERS_USERS=()
-for ip in "${WORKERS_IPS[@]}"; do
-  WORKERS_USERS+=("$SSH_USER")
-done
+MASTER_IP=$(yq e '.nodes.master.ip' $CLUSTER_CONFIG)
+MASTER_USER=$(yq e '.nodes.master.user' $CLUSTER_CONFIG)
 
 install_docker() {
   local ip=$1
@@ -45,22 +37,16 @@ init_swarm() {
   "
 }
 
-get_worker_token() {
-  ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker swarm join-token worker -q"
-}
-
 join_workers() {
-  local token=$1
-  for i in "${!WORKERS_IPS[@]}"; do
-    ssh -o StrictHostKeyChecking=no "${WORKERS_USERS[$i]}@${WORKERS_IPS[$i]}" "
-      if ! sudo docker info | grep 'Swarm: active' &> /dev/null; then
-        sudo docker swarm join --token $token $MASTER_IP:2377
-        echo \"Worker ${WORKERS_IPS[$i]} joined the cluster\"
-      else
-        echo \"Worker ${WORKERS_IPS[$i]} already in a Swarm\"
-      fi
-    "
-  done
+  ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
+    WORKERS=\$(yq e '.nodes.workers[] | .ip + \" \" + .user' $CLUSTER_CONFIG)
+    TOKEN=\$(sudo docker swarm join-token worker -q)
+    for worker in \$WORKERS; do
+      IP=\$(echo \$worker | cut -d' ' -f1)
+      USER=\$(echo \$worker | cut -d' ' -f2)
+      ssh -o StrictHostKeyChecking=no \$USER@\$IP \"sudo docker swarm join --token \$TOKEN $MASTER_IP:2377\" || echo \"Worker \$IP already joined or failed\"
+    done
+  "
 }
 
 deploy_stack() {
@@ -70,14 +56,9 @@ deploy_stack() {
 
 echo "Starting cluster deployment..."
 
-for i in "${!WORKERS_IPS[@]}"; do
-  install_docker "${WORKERS_IPS[$i]}" "${WORKERS_USERS[$i]}"
-done
-
 install_docker "$MASTER_IP" "$MASTER_USER"
 init_swarm
-TOKEN=$(get_worker_token)
-join_workers "$TOKEN"
+join_workers
 deploy_stack
 
 echo "Deployment complete."
