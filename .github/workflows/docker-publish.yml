@@ -18,7 +18,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Install Trivy CLI (for SCA + vuln + secrets scan)
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
@@ -30,14 +29,12 @@ jobs:
           trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
         continue-on-error: true
 
-      # Bandit Python SAST
       - name: Bandit security scan (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
         with:
           targets: "./backend"
 
-      # Flake8 Python linter
       - name: Flake8 linter
         uses: py-actions/flake8@v2
         continue-on-error: true
@@ -130,3 +127,30 @@ jobs:
           echo '### Frontend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
           echo '### Security Scans: Trivy, Bandit, Flake8' >> $GITHUB_STEP_SUMMARY
           echo 'Badges visible in README. Full reports available in GitHub Security tab.' >> $GITHUB_STEP_SUMMARY
+
+  deploy_cluster:
+    name: Deploy Cluster (Docker Swarm)
+    runs-on: ubuntu-latest
+    needs: [build_docker]
+    env:
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      MASTER_IP: ${{ secrets.MASTER_IP }}
+      WORKER_IPS: ${{ secrets.WORKER_IPS }}
+      SSH_USER: ${{ secrets.SSH_USER }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+
+      - name: Install yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+
+      - name: Deploy Cluster script
+        run: |
+          chmod +x ./scripts/deploy_cluster.sh
+          ./scripts/deploy_cluster.sh

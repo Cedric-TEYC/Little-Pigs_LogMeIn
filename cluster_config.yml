@@ -1,0 +1,9 @@
+nodes:
+  master:
+    ip: 192.168.1.84
+    user: masterauto
+  workers:
+    - ip: 192.168.1.17
+      user: worker1auto
+    - ip: 192.168.1.148
+      user: worker2auto
