@@ -56,9 +56,23 @@ deploy_stack() {
 
 echo "Starting cluster deployment..."
 
+# Install Docker on master
 install_docker "$MASTER_IP" "$MASTER_USER"
+
+# Install Docker on workers
+WORKERS_IPS=($(yq e '.nodes.workers[].ip' $CLUSTER_CONFIG))
+WORKERS_USERS=($(yq e '.nodes.workers[].user' $CLUSTER_CONFIG))
+for i in "${!WORKERS_IPS[@]}"; do
+  install_docker "${WORKERS_IPS[$i]}" "${WORKERS_USERS[$i]}"
+done
+
+# Init swarm on master
 init_swarm
+
+# Join workers to swarm
 join_workers
+
+# Deploy stack
 deploy_stack
 
 echo "Deployment complete."
