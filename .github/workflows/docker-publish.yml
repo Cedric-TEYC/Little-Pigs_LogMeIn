@@ -71,7 +71,7 @@ jobs:
       - name: Build frontend Docker image
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
       - name: Build nginx Docker image
-        run: docker build -t $DOCKERHUB_USERNAME/littlepigs-nginx:latest -f ./nginx/Dockerfile .
+        run: docker build -t $DOCKERHUB_USERNAME/littlepigs-nginx:latest -f nginx/Dockerfile .
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
