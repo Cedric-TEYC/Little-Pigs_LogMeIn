@@ -131,6 +131,12 @@ jobs:
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+
+      # COPIE le fichier cluster_config.yml AVANT le script
+      - name: Copy cluster_config.yml to master
+        run: scp -o StrictHostKeyChecking=no cluster_config.yml $SSH_USER@$MASTER_IP:~/
+
+      # Installe yq sur le runner (pas sur master ici)
       - name: Install yq (on runner for deploy script)
         run: |
           wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O ./yq
@@ -138,7 +144,10 @@ jobs:
           mkdir -p $HOME/.local/bin
           mv ./yq $HOME/.local/bin/yq
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      # Exécute le script de déploiement qui va utiliser le fichier sur la machine cible
       - name: Deploy Cluster script
         run: |
           chmod +x ./scripts/deploy_cluster.sh
           ./scripts/deploy_cluster.sh
+
