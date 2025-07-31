@@ -85,6 +85,9 @@ jobs:
       - name: Build frontend Docker image
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
 
+      - name: Build nginx Docker image
+        run: docker build -t $DOCKERHUB_USERNAME/littlepigs-nginx:latest ./nginx
+
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
@@ -101,11 +104,19 @@ jobs:
           trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
         continue-on-error: true
 
+      - name: Trivy scan nginx Docker image
+        run: |
+          trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-nginx.sarif $DOCKERHUB_USERNAME/littlepigs-nginx:latest
+        continue-on-error: true
+
       - name: Push backend image
         run: docker push $DOCKERHUB_USERNAME/littlepigs-backend:latest
 
       - name: Push frontend image
         run: docker push $DOCKERHUB_USERNAME/littlepigs-frontend:latest
+
+      - name: Push nginx image
+        run: docker push $DOCKERHUB_USERNAME/littlepigs-nginx:latest
 
       - name: Upload backend SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -119,12 +130,19 @@ jobs:
           sarif_file: "trivy-frontend.sarif"
           category: "trivy-frontend"
 
+      - name: Upload nginx SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: "trivy-nginx.sarif"
+          category: "trivy-nginx"
+
       - name: Generate CI Summary
         if: always()
         run: |
           echo '## CI/CD Job Summary' >> $GITHUB_STEP_SUMMARY
           echo '### Backend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest`' >> $GITHUB_STEP_SUMMARY
           echo '### Frontend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
+          echo '### Nginx Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-nginx:latest`' >> $GITHUB_STEP_SUMMARY
           echo '### Security Scans: Trivy, Bandit, Flake8' >> $GITHUB_STEP_SUMMARY
           echo 'Badges visible in README. Full reports available in GitHub Security tab.' >> $GITHUB_STEP_SUMMARY
 
