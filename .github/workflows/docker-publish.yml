@@ -86,7 +86,7 @@ jobs:
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
 
       - name: Build nginx Docker image
-        run: docker build -t $DOCKERHUB_USERNAME/littlepigs-nginx:latest ./nginx
+        run: docker build -t $DOCKERHUB_USERNAME/littlepigs-nginx:latest -f ./nginx/Dockerfile .
 
       - name: Install Trivy
         run: |
@@ -135,16 +135,6 @@ jobs:
         with:
           sarif_file: "trivy-nginx.sarif"
           category: "trivy-nginx"
-
-      - name: Generate CI Summary
-        if: always()
-        run: |
-          echo '## CI/CD Job Summary' >> $GITHUB_STEP_SUMMARY
-          echo '### Backend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Frontend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Nginx Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-nginx:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Security Scans: Trivy, Bandit, Flake8' >> $GITHUB_STEP_SUMMARY
-          echo 'Badges visible in README. Full reports available in GitHub Security tab.' >> $GITHUB_STEP_SUMMARY
 
   deploy_cluster:
     name: Deploy Cluster (Docker Swarm)
