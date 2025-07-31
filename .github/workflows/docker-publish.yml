@@ -131,7 +131,7 @@ jobs:
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
-      - name: Install yq
+      - name: Install yq (on runner for deploy script)
         run: |
           wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O ./yq
           chmod +x ./yq
