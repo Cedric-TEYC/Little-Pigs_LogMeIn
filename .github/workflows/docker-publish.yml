@@ -122,32 +122,23 @@ jobs:
     runs-on: self-hosted
     needs: [build_docker]
     env:
+      ADMIN_USER: ${{ secrets.ADMIN_USER }}
+      ADMIN_IP: ${{ secrets.ADMIN_IP }}
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-      MASTER_IP: ${{ secrets.MASTER_IP }}
-      WORKER_IPS: ${{ secrets.WORKER_IPS }}
-      SSH_USER: ${{ secrets.SSH_USER }}
     steps:
       - uses: actions/checkout@v3
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
-      # COPIE le fichier cluster_config.yml AVANT le script
-      - name: Copy cluster_config.yml to master
-        run: scp -o StrictHostKeyChecking=no cluster_config.yml $SSH_USER@$MASTER_IP:~/
-
-      # Installe yq sur le runner (pas sur master ici)
-      - name: Install yq (on runner for deploy script)
+      # On envoie les fichiers (config + compose + script) sur l'admin
+      - name: Copy deploy scripts and config to admin
         run: |
-          wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O ./yq
-          chmod +x ./yq
-          mkdir -p $HOME/.local/bin
-          mv ./yq $HOME/.local/bin/yq
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          scp -o StrictHostKeyChecking=no cluster_config.yml $ADMIN_USER@$ADMIN_IP:~/
+          scp -o StrictHostKeyChecking=no docker-compose.yml $ADMIN_USER@$ADMIN_IP:~/
+          scp -o StrictHostKeyChecking=no scripts/deploy_cluster.sh $ADMIN_USER@$ADMIN_IP:~/
 
-      # Exécute le script de déploiement qui va utiliser le fichier sur la machine cible
-      - name: Deploy Cluster script
+      # On exécute le script sur l'admin (qui pilotera tout)
+      - name: Deploy Cluster script (run from admin)
         run: |
-          chmod +x ./scripts/deploy_cluster.sh
-          ./scripts/deploy_cluster.sh
-
+          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"

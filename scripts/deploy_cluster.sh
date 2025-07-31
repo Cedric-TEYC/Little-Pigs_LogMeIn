@@ -3,33 +3,27 @@ set -e
 
 CLUSTER_CONFIG="cluster_config.yml"
 
-# 1. Récupérer IP/user master + arrays pour workers
+# Récupérer IP/user master + arrays pour workers depuis le YAML sur l'admin
 MASTER_IP=$(yq e '.nodes.master.ip' $CLUSTER_CONFIG)
 MASTER_USER=$(yq e '.nodes.master.user' $CLUSTER_CONFIG)
 WORKERS_IPS=($(yq e '.nodes.workers[].ip' $CLUSTER_CONFIG))
 WORKERS_USERS=($(yq e '.nodes.workers[].user' $CLUSTER_CONFIG))
 
-# 2. Copie cluster_config.yml et docker-compose.yml sur le master
-echo "Copie des fichiers de conf vers le master..."
+# 1. Copier cluster_config.yml et docker-compose.yml de l'admin vers le master
 scp -o StrictHostKeyChecking=no "$CLUSTER_CONFIG" "$MASTER_USER@$MASTER_IP:~/"
 scp -o StrictHostKeyChecking=no docker-compose.yml "$MASTER_USER@$MASTER_IP:~/"
 
-# 3. Fonction préparation node (yq + Docker)
+# 2. Préparer tous les nodes (yq + Docker install)
 prepare_node() {
   local ip=$1
   local user=$2
   ssh -o StrictHostKeyChecking=no "$user@$ip" "
-    # Installe yq si absent
     if ! command -v yq &> /dev/null; then
-      echo 'Installing yq on $ip...'
       wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O yq
       chmod +x yq
       sudo mv yq /usr/local/bin/yq
     fi
-
-    # Installe Docker si absent
     if ! command -v docker &> /dev/null; then
-      echo 'Installing Docker on $ip...'
       sudo apt update && sudo apt install -y ca-certificates curl gnupg
       sudo install -m 0755 -d /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -38,32 +32,25 @@ prepare_node() {
       sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
       sudo systemctl enable docker
       sudo systemctl start docker
-    else
-      echo \"Docker already installed on $ip\"
     fi
   "
 }
 
-echo "Préparation du master..."
 prepare_node "$MASTER_IP" "$MASTER_USER"
 for i in "${!WORKERS_IPS[@]}"; do
-  echo "Préparation du worker ${WORKERS_IPS[$i]}..."
   prepare_node "${WORKERS_IPS[$i]}" "${WORKERS_USERS[$i]}"
 done
 
-# 4. Init swarm sur le master
+# 3. Init swarm sur master
 init_swarm() {
   ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
     if ! sudo docker info | grep 'Swarm: active' &> /dev/null; then
       sudo docker swarm init --advertise-addr $MASTER_IP
-      echo 'Swarm initialized on Master'
-    else
-      echo 'Swarm already initialized'
     fi
   "
 }
 
-# 5. Join des workers
+# 4. Join des workers
 join_workers() {
   ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
     WORKERS=\$(yq e '.nodes.workers[] | .ip + \" \" + .user' ~/cluster_config.yml)
@@ -76,15 +63,13 @@ join_workers() {
   "
 }
 
-# 6. Déploiement du stack sur le master
+# 5. Déploiement du stack sur le master
 deploy_stack() {
   ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker stack deploy -c ~/docker-compose.yml littlepigs"
 }
 
 echo "Starting cluster deployment..."
-
 init_swarm
 join_workers
 deploy_stack
-
 echo "Deployment complete."
