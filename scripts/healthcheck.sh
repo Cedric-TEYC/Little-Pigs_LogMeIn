@@ -20,10 +20,19 @@ ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
   echo '[SERVICES SWARM]'; sudo docker service ls;
   echo '[LITTLEPIGS_BACKEND TASKS]'; sudo docker service ps littlepigs_backend;
   echo '[CONTAINERS RUNNING]'; sudo docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}';
-  echo '[TEST HTTP LOCALHOST:3000]'; curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3000;
-  echo '[TEST API BACKEND /api/stats]'; curl -s -w '\n' http://localhost:5000/api/stats;
   echo '[Espace disque]'; df -h /
 " | tee -a "$logfile"
+
+log "===== TEST HTTP NGINX SUR TOUS LES NODES ====="
+for IP in "$MASTER_IP" "${WORKERS_IPS[@]}"; do
+  echo -n "Test accès HTTP Nginx sur $IP:3000 ... " | tee -a "$logfile"
+  CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$IP:3000)
+  echo "$CODE" | tee -a "$logfile"
+done
+
+log "===== TEST API BACKEND SUR MASTER ====="
+API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$MASTER_IP:5000/api/stats)
+echo "Test API Backend sur $MASTER_IP:5000/api/stats ... $API_CODE" | tee -a "$logfile"
 
 for i in "${!WORKERS_IPS[@]}"; do
   IP="${WORKERS_IPS[$i]}"
