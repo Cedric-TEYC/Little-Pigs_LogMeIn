@@ -1,41 +1,71 @@
-version: "3"
+version: "3.8"
+
 services:
   db:
     image: postgres:15
-    restart: always
     environment:
-      POSTGRES_DB: logmeindb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      - POSTGRES_DB=logmeindb
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     volumes:
       - pgdata:/var/lib/postgresql/data
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager   # DB que sur le manager !
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
 
   backend:
     image: cedricteyc/littlepigs-backend:latest
-    restart: always
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: logmeindb
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-    ports:
-      - "5000:5000"
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=logmeindb
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
     depends_on:
       - db
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
   frontend:
     image: cedricteyc/littlepigs-frontend:latest
-    restart: always
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
 
   nginx:
     image: cedricteyc/littlepigs-nginx:latest
-    restart: always
-    ports:
-      - "3000:80"
     depends_on:
       - frontend
       - backend
+    ports:
+      - "3000:80"    # Swarm mesh, ok
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
 
 volumes:
   pgdata:
