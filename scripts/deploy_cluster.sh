@@ -51,17 +51,14 @@ init_swarm() {
   "
 }
 
-# 4. Join des workers
+# 4. Join des workers (depuis admin-auto, plus jamais de nested SSH !)
 join_workers() {
-  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
-    WORKERS=\$(yq e '.nodes.workers[] | .ip + \" \" + .user' ~/cluster_config.yml)
-    TOKEN=\$(sudo docker swarm join-token worker -q)
-    for worker in \$WORKERS; do
-      IP=\$(echo \$worker | cut -d' ' -f1)
-      USER=\$(echo \$worker | cut -d' ' -f2)
-      ssh -i $SSH_KEY -o StrictHostKeyChecking=no \$USER@\$IP \"sudo docker swarm join --token \$TOKEN $MASTER_IP:2377\" || echo \"Worker \$IP already joined or failed\"
-    done
-  "
+  TOKEN=$(ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker swarm join-token worker -q")
+  for i in "${!WORKERS_IPS[@]}"; do
+    IP="${WORKERS_IPS[$i]}"
+    USER="${WORKERS_USERS[$i]}"
+    ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$USER@$IP" "sudo docker swarm join --token $TOKEN $MASTER_IP:2377" || echo "Worker $IP already joined or failed"
+  done
 }
 
 # 5. Déploiement du stack sur le master
