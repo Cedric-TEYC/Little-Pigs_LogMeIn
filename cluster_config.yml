@@ -7,3 +7,4 @@ nodes:
       user: worker1auto
     - ip: 192.168.1.148
       user: worker2auto
+      
