@@ -14,6 +14,20 @@ MASTER_USER=$(yq e '.nodes.master.user' $CLUSTER_CONFIG)
 WORKERS_IPS=($(yq e '.nodes.workers[].ip' $CLUSTER_CONFIG))
 WORKERS_USERS=($(yq e '.nodes.workers[].user' $CLUSTER_CONFIG))
 
+# Nettoyage automatique des anciennes tâches backend arrêtées
+log "===== Nettoyage des anciennes tâches backend arrêtées ====="
+ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
+  OLD_TASKS=\$(sudo docker service ps littlepigs_backend --filter desired-state=shutdown -q)
+  if [ -n \"\$OLD_TASKS\" ]; then
+    echo \"Suppression des anciennes tâches backend (shutdown) : \$OLD_TASKS\"
+    for task in \$OLD_TASKS; do
+      sudo docker rm \$(sudo docker ps -a --filter \"id=\$task\" -q) || true
+    done
+  else
+    echo \"Aucune tâche backend arrêtée à nettoyer.\"
+  fi
+" | tee -a "$logfile"
+
 log "===== ÉTAT DU CLUSTER SWARM ====="
 ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
   echo '[NODES SWARM]'; sudo docker node ls;
@@ -26,7 +40,7 @@ ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
 log "===== TEST HTTP NGINX SUR TOUS LES NODES ====="
 for IP in "$MASTER_IP" "${WORKERS_IPS[@]}"; do
   echo -n "Test accès HTTP Nginx sur $IP:3000 ... " | tee -a "$logfile"
-  CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$IP:3000 || true)
+  CODE=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" http://$IP:3000 || true)
   echo "$CODE" | tee -a "$logfile"
   if [[ "$CODE" != "200" ]]; then
     echo "[WARNING] Nginx sur $IP:3000 ne répond pas en HTTP 200 (code retourné : $CODE)" | tee -a "$logfile"
@@ -36,7 +50,7 @@ done
 log "===== TEST API BACKEND VIA NGINX (/api/stats) ====="
 for IP in "$MASTER_IP" "${WORKERS_IPS[@]}"; do
   echo -n "Test API Backend via Nginx sur $IP:3000/api/stats ... " | tee -a "$logfile"
-  API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$IP:3000/api/stats || true)
+  API_CODE=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" http://$IP:3000/api/stats || true)
   echo "$API_CODE" | tee -a "$logfile"
   if [[ "$API_CODE" != "200" ]]; then
     echo "[WARNING] API Backend via Nginx sur $IP:3000/api/stats ne répond pas en HTTP 200 (code : $API_CODE)" | tee -a "$logfile"
