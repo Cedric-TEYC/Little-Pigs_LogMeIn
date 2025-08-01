@@ -131,14 +131,22 @@ jobs:
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
-      # On envoie les fichiers (config + compose + script) sur l'admin
       - name: Copy deploy scripts and config to admin
         run: |
           scp -o StrictHostKeyChecking=no cluster_config.yml $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no docker-compose.yml $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no scripts/deploy_cluster.sh $ADMIN_USER@$ADMIN_IP:~/
 
-      # On exécute le script sur l'admin (qui pilotera tout)
+      - name: Ensure yq is installed on admin
+        run: |
+          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "\
+            if ! command -v yq &> /dev/null; then \
+              wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O yq && \
+              chmod +x yq && \
+              sudo mv yq /usr/local/bin/yq; \
+            fi \
+          "
+
       - name: Deploy Cluster script (run from admin)
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
