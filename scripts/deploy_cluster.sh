@@ -2,6 +2,7 @@
 set -e
 
 CLUSTER_CONFIG="cluster_config.yml"
+SSH_KEY="~/.ssh/id_ed25519_github" # Utilise toujours cette clé
 
 # Récupérer IP/user master + arrays pour workers depuis le YAML sur l'admin
 MASTER_IP=$(yq e '.nodes.master.ip' $CLUSTER_CONFIG)
@@ -10,14 +11,14 @@ WORKERS_IPS=($(yq e '.nodes.workers[].ip' $CLUSTER_CONFIG))
 WORKERS_USERS=($(yq e '.nodes.workers[].user' $CLUSTER_CONFIG))
 
 # 1. Copier cluster_config.yml et docker-compose.yml de l'admin vers le master
-scp -o StrictHostKeyChecking=no "$CLUSTER_CONFIG" "$MASTER_USER@$MASTER_IP:~/"
-scp -o StrictHostKeyChecking=no docker-compose.yml "$MASTER_USER@$MASTER_IP:~/"
+scp -i $SSH_KEY -o StrictHostKeyChecking=no "$CLUSTER_CONFIG" "$MASTER_USER@$MASTER_IP:~/"
+scp -i $SSH_KEY -o StrictHostKeyChecking=no docker-compose.yml "$MASTER_USER@$MASTER_IP:~/"
 
 # 2. Préparer tous les nodes (yq + Docker install)
 prepare_node() {
   local ip=$1
   local user=$2
-  ssh -o StrictHostKeyChecking=no "$user@$ip" "
+  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$user@$ip" "
     if ! command -v yq &> /dev/null; then
       wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O yq
       chmod +x yq
@@ -43,7 +44,7 @@ done
 
 # 3. Init swarm sur master
 init_swarm() {
-  ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
+  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
     if ! sudo docker info | grep 'Swarm: active' &> /dev/null; then
       sudo docker swarm init --advertise-addr $MASTER_IP
     fi
@@ -52,20 +53,20 @@ init_swarm() {
 
 # 4. Join des workers
 join_workers() {
-  ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
+  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
     WORKERS=\$(yq e '.nodes.workers[] | .ip + \" \" + .user' ~/cluster_config.yml)
     TOKEN=\$(sudo docker swarm join-token worker -q)
     for worker in \$WORKERS; do
       IP=\$(echo \$worker | cut -d' ' -f1)
       USER=\$(echo \$worker | cut -d' ' -f2)
-      ssh -o StrictHostKeyChecking=no \$USER@\$IP \"sudo docker swarm join --token \$TOKEN $MASTER_IP:2377\" || echo \"Worker \$IP already joined or failed\"
+      ssh -i $SSH_KEY -o StrictHostKeyChecking=no \$USER@\$IP \"sudo docker swarm join --token \$TOKEN $MASTER_IP:2377\" || echo \"Worker \$IP already joined or failed\"
     done
   "
 }
 
 # 5. Déploiement du stack sur le master
 deploy_stack() {
-  ssh -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker stack deploy -c ~/docker-compose.yml littlepigs"
+  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker stack deploy -c ~/docker-compose.yml littlepigs"
 }
 
 echo "Starting cluster deployment..."
