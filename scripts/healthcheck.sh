@@ -33,12 +33,15 @@ for IP in "$MASTER_IP" "${WORKERS_IPS[@]}"; do
   fi
 done
 
-log "===== TEST API BACKEND SUR MASTER ====="
-API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$MASTER_IP:5000/api/stats || true)
-echo "Test API Backend sur $MASTER_IP:5000/api/stats ... $API_CODE" | tee -a "$logfile"
-if [[ "$API_CODE" != "200" ]]; then
-  echo "[WARNING] Backend API ($MASTER_IP:5000/api/stats) ne répond pas en HTTP 200 (code : $API_CODE)" | tee -a "$logfile"
-fi
+log "===== TEST API BACKEND VIA NGINX (/api/stats) ====="
+for IP in "$MASTER_IP" "${WORKERS_IPS[@]}"; do
+  echo -n "Test API Backend via Nginx sur $IP:3000/api/stats ... " | tee -a "$logfile"
+  API_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://$IP:3000/api/stats || true)
+  echo "$API_CODE" | tee -a "$logfile"
+  if [[ "$API_CODE" != "200" ]]; then
+    echo "[WARNING] API Backend via Nginx sur $IP:3000/api/stats ne répond pas en HTTP 200 (code : $API_CODE)" | tee -a "$logfile"
+  fi
+done
 
 for i in "${!WORKERS_IPS[@]}"; do
   IP="${WORKERS_IPS[$i]}"
