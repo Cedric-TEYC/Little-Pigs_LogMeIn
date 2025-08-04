@@ -15,9 +15,8 @@ permissions:
 
 jobs:
   mise_a_jour_backend:
-    name: Mise à jour automatique planifiée du backend
+    name: Mise à jour automatique du backend
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Récupérer le code
         uses: actions/checkout@v4
@@ -31,7 +30,7 @@ jobs:
       - name: Message de succès
         if: success()
         run: |
-          echo "✅ Build réussi : les mises à jour hebdomadaires du backend se sont bien passées !"
+          echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
 
       - name: Message d’erreur
         if: failure()
@@ -39,7 +38,7 @@ jobs:
           echo "❌ Build échoué : une mise à jour a cassé le build du backend."
           echo "Pour diagnostiquer :"
           echo "1️⃣ Va dans l’onglet 'Actions' de ton dépôt GitHub."
-          echo "2️⃣ Sélectionne 'Mise à jour automatique planifiée du backend'."
+          echo "2️⃣ Sélectionne 'Mise à jour automatique du backend'."
           echo "3️⃣ Clique sur la dernière exécution échouée pour voir les logs détaillés."
           echo "Corrige l’erreur puis relance le workflow si besoin."
 
