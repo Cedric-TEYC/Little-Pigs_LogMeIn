@@ -30,7 +30,8 @@ jobs:
 
       - name: Message de succès
         if: success()
-        run: echo "✅ Build réussi : les mises à jour hebdomadaires du backend se sont bien passées !"
+        run: |
+          echo "✅ Build réussi : les mises à jour hebdomadaires du backend se sont bien passées !"
 
       - name: Message d’erreur
         if: failure()
