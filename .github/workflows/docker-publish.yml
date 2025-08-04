@@ -1,126 +1,172 @@
-name: DevSecOps Pipeline
+name: Pipeline DevSecOps
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 2 * * 1'        # Lundi à 2h du matin
+  workflow_dispatch:
 
 permissions:
   contents: read
   security-events: write
 
 jobs:
-  security_quality:
-    name: Security & Quality (Trivy CLI, Bandit, Flake8)
+  mise_a_jour_backend:
+    name: Mise à jour automatique planifiée du backend
     runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Configurer Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Construire l’image Docker backend
+        run: docker build -t local-backend:latest ./backend
+
+      - name: Message de succès
+        if: success()
+        run: echo "✅ Build réussi : les mises à jour hebdomadaires du backend se sont bien passées !"
+
+      - name: Message d’erreur
+        if: failure()
+        run: |
+          echo "❌ Build échoué : une mise à jour a cassé le build du backend."
+          echo "Pour diagnostiquer :"
+          echo "1️⃣ Va dans l’onglet 'Actions' de ton dépôt GitHub."
+          echo "2️⃣ Sélectionne 'Mise à jour automatique planifiée du backend'."
+          echo "3️⃣ Clique sur la dernière exécution échouée pour voir les logs détaillés."
+          echo "Corrige l’erreur puis relance le workflow si besoin."
+
+  controle_qualite:
+    name: Contrôle qualité et tests (Trivy, Bandit, Flake8, Pytest)
+    runs-on: ubuntu-latest
+    needs: mise_a_jour_backend
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v3
-      - name: Install Trivy
+
+      - name: Installer Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
-      - name: Trivy scan codebase (SCA + vuln + secrets)
+
+      - name: Scan Trivy du code (SCA + vuln + secrets)
         run: |
           trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
         continue-on-error: true
-      - name: Bandit security scan (Python)
+
+      - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
         with:
           targets: "./backend"
-      - name: Flake8 linter
+
+      - name: Linter Flake8
         uses: py-actions/flake8@v2
         continue-on-error: true
         with:
           path: "./backend"
 
-  pytest:
-    name: Pytest (unit tests)
-    runs-on: ubuntu-latest
-    needs: security_quality
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install dependencies
+      - name: Installer les dépendances Python
         run: |
           pip install -r backend/requirements.txt
           pip install pytest
-      - name: Run pytest
+
+      - name: Lancer Pytest
         run: pytest backend/tests || true
 
-  build_docker:
-    name: Build, Scan & Push Docker Images
+  construction_et_deploiement:
+    name: Construction, scan & déploiement des images Docker
     runs-on: ubuntu-latest
-    needs: [pytest]
+    needs: [controle_qualite]
+    if: github.event_name != 'schedule'
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v3
+
       - uses: docker/setup-buildx-action@v3
+
       - uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ env.DOCKERHUB_TOKEN }}
-      - name: Build backend Docker image
+
+      - name: Construire l’image backend
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-backend:latest ./backend
-      - name: Build frontend Docker image
+
+      - name: Construire l’image frontend
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-frontend:latest ./frontend
-      - name: Build nginx Docker image
+
+      - name: Construire l’image nginx
         run: docker build -t $DOCKERHUB_USERNAME/littlepigs-nginx:latest -f nginx/Dockerfile .
-      - name: Install Trivy
+
+      - name: Installer Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
-      - name: Trivy scan backend Docker image
+
+      - name: Scanner l’image backend avec Trivy
         run: |
           trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-backend.sarif $DOCKERHUB_USERNAME/littlepigs-backend:latest
         continue-on-error: true
-      - name: Trivy scan frontend Docker image
+
+      - name: Scanner l’image frontend avec Trivy
         run: |
           trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
         continue-on-error: true
-      - name: Trivy scan nginx Docker image
+
+      - name: Scanner l’image nginx avec Trivy
         run: |
           trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-nginx.sarif $DOCKERHUB_USERNAME/littlepigs-nginx:latest
         continue-on-error: true
-      - name: Push backend image
+
+      - name: Pousser l’image backend
         run: docker push $DOCKERHUB_USERNAME/littlepigs-backend:latest
-      - name: Push frontend image
+
+      - name: Pousser l’image frontend
         run: docker push $DOCKERHUB_USERNAME/littlepigs-frontend:latest
-      - name: Push nginx image
+
+      - name: Pousser l’image nginx
         run: docker push $DOCKERHUB_USERNAME/littlepigs-nginx:latest
+
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-backend.sarif"
           category: "trivy-backend"
+
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-frontend.sarif"
           category: "trivy-frontend"
+
       - uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: "trivy-nginx.sarif"
           category: "trivy-nginx"
-      - name: Generate CI Summary
+
+      - name: Générer le résumé CI
         if: always()
         run: |
-          echo '## CI/CD Job Summary' >> $GITHUB_STEP_SUMMARY
-          echo '### Backend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Frontend Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Nginx Image: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-nginx:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Security Scans: Trivy, Bandit, Flake8' >> $GITHUB_STEP_SUMMARY
-          echo 'Badges visible in README. Full reports available in GitHub Security tab.'
+          echo '## Résumé du job CI/CD' >> $GITHUB_STEP_SUMMARY
+          echo '### Image backend: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest`' >> $GITHUB_STEP_SUMMARY
+          echo '### Image frontend: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
+          echo '### Image nginx: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-nginx:latest`' >> $GITHUB_STEP_SUMMARY
+          echo '### Scans de sécurité: Trivy, Bandit, Flake8, Pytest' >> $GITHUB_STEP_SUMMARY
+          echo 'Badges visibles dans le README. Rapports complets disponibles dans l’onglet Security de GitHub.'
 
   deploy_cluster:
-    name: Deploy Cluster (Docker Swarm)
+    name: Déploiement du cluster (Docker Swarm)
     runs-on: self-hosted
-    needs: [build_docker]
+    needs: [construction_et_deploiement]
     env:
       ADMIN_USER: ${{ secrets.ADMIN_USER }}
       ADMIN_IP: ${{ secrets.ADMIN_IP }}
@@ -131,13 +177,13 @@ jobs:
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
-      - name: Copy deploy scripts and config to admin
+      - name: Copier scripts et configs sur admin
         run: |
           scp -o StrictHostKeyChecking=no cluster_config.yml $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no docker-compose.yml $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no scripts/deploy_cluster.sh $ADMIN_USER@$ADMIN_IP:~/
 
-      - name: Ensure yq is installed on admin
+      - name: Installer yq sur admin
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "\
             if ! command -v yq &> /dev/null; then \
@@ -147,12 +193,12 @@ jobs:
             fi \
           "
 
-      - name: Deploy Cluster script (run from admin)
+      - name: Lancer le script de déploiement
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
 
   cluster_healthcheck:
-    name: Cluster Healthcheck & Logs
+    name: Vérification santé du cluster et logs
     runs-on: self-hosted
     needs: [deploy_cluster]
     env:
@@ -166,17 +212,16 @@ jobs:
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
 
-      - name: Copier healthcheck.sh et cluster_config.yml sur admin-auto
+      - name: Copier healthcheck.sh et cluster_config.yml sur admin
         run: |
           scp -o StrictHostKeyChecking=no scripts/healthcheck.sh $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no cluster_config.yml $ADMIN_USER@$ADMIN_IP:~/
 
-      - name: Exécuter le healthcheck (logs + checks)
+      - name: Exécuter healthcheck (logs + vérifications)
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/healthcheck.sh && ~/healthcheck.sh"
 
-      - name: Récupérer et afficher le log du check
+      - name: Récupérer et afficher le log du healthcheck
         run: |
           scp -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP:~/cluster_health.log ./cluster_health.log
           cat ./cluster_health.log
-          
