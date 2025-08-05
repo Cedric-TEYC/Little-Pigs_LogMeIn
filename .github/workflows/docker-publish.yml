@@ -160,7 +160,7 @@ jobs:
   deploy_cluster:
     name: Déploiement du cluster (Docker Swarm)
     runs-on: self-hosted
-    needs: deploy_cluster
+    needs: construction_et_deploiement
     env:
       ADMIN_USER: ${{ secrets.ADMIN_USER }}
       ADMIN_IP: ${{ secrets.ADMIN_IP }}
