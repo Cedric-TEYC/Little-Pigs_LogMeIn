@@ -71,6 +71,8 @@ jobs:
           pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest
+      - name: Attendre que Postgres soit prêt
+        run: bash backend/wait-for-it.sh db:5432 --timeout=60 --strict -- echo "Postgres is up"
       - name: Initialiser la base de données
         run: |
           export DB_HOST=db
