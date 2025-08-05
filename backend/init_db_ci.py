@@ -1,7 +1,7 @@
 import time
-from app import init_db
 import os
 import psycopg2
+from app import init_db
 
 def wait_for_db(host, port, user, password, dbname, timeout=60):
     start = time.time()
@@ -25,12 +25,14 @@ def wait_for_db(host, port, user, password, dbname, timeout=60):
 
 if __name__ == "__main__":
     host = os.getenv("DB_HOST", "db")
-    port = int(os.getenv("DB_PORT", 5432))  # Assure que c'est un int
+    port = int(os.getenv("DB_PORT", 5432))
     user = os.getenv("DB_USER", "postgres")
     password = os.getenv("DB_PASSWORD", "postgres")
     dbname = os.getenv("DB_NAME", "logmeindb")
 
     if wait_for_db(host, port, user, password, dbname):
+        print("Initialisation de la base...")
         init_db()
     else:
+        print("Erreur : impossible de se connecter à la base.")
         exit(1)
