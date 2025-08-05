@@ -3,7 +3,10 @@ from app import init_db
 import os
 import psycopg2
 
-def wait_for_db(host, port, user, password, dbname, timeout=120):
+def wait_for_db(host, port, user, password, dbname, timeout=120, retry_interval=3):
+    print(f"Attente initiale de 10s avant de tester la DB...")
+    time.sleep(10)  # Pause initiale pour laisser le temps à Postgres de démarrer
+
     start = time.time()
     while time.time() - start < timeout:
         try:
@@ -18,8 +21,8 @@ def wait_for_db(host, port, user, password, dbname, timeout=120):
             print("DB is ready.")
             return True
         except psycopg2.OperationalError:
-            print("Tentative : DB pas encore dispo, attente 3s...")
-            time.sleep(3)
+            print(f"Tentative : DB pas encore dispo, attente {retry_interval}s...")
+            time.sleep(retry_interval)
     print("La base de données n'est pas disponible, abandon.")
     return False
 
