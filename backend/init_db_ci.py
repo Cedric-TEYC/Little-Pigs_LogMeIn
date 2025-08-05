@@ -3,7 +3,7 @@ from app import init_db
 import os
 import psycopg2
 
-def wait_for_db(host, port, user, password, dbname, timeout=60):
+def wait_for_db(host, port, user, password, dbname, timeout=120):
     start = time.time()
     while time.time() - start < timeout:
         try:

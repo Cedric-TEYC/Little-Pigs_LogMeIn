@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 1'  # Lundi à 2h du matin
+    - cron: '0 2 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -23,17 +23,14 @@ jobs:
       - run: docker build -t local-backend:latest ./backend
       - name: Message de succès
         if: success()
-        run: |
-          echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
+        run: echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
       - name: Message d’erreur
         if: failure()
         run: |
           echo "❌ Build échoué : une mise à jour a cassé le build du backend."
-          echo "Pour diagnostiquer :"
           echo "1️⃣ Va dans l’onglet 'Actions' de ton dépôt GitHub."
           echo "2️⃣ Sélectionne 'Mise à jour automatique du backend'."
           echo "3️⃣ Clique sur la dernière exécution échouée pour voir les logs détaillés."
-          echo "Corrige l’erreur puis relance le workflow si besoin."
 
   controle_qualite:
     name: Contrôle qualité et tests (Pytest, Bandit, Flake8, Trivy)
@@ -53,7 +50,7 @@ jobs:
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 5
+          --health-retries 10
     env:
       DB_HOST: db
       DB_PORT: 5432
@@ -62,53 +59,36 @@ jobs:
       DB_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v3
-
       - name: Installer Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Installer dépendances Python
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt
-          pip install pytest
-
-      - name: Attendre que Postgres soit prêt
-        run: python backend/wait_for_db.py db 5432 60
-
-      - name: Initialiser la base de données
-        run: |
-          export DB_HOST=db
-          export DB_PORT=5432
-          export DB_NAME=logmeindb
-          export DB_USER=postgres
-          export DB_PASSWORD=postgres
-          python backend/init_db_ci.py
-
+          pip install pytest psycopg2-binary
+      - name: Initialiser la base de données (avec attente DB ready)
+        run: python backend/init_db_ci.py
       - name: Lancer Pytest
         run: |
           export PYTHONPATH=backend
           pytest backend/tests
-
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
         with:
           targets: "./backend"
-
       - name: Linter Flake8
         uses: py-actions/flake8@v2
         continue-on-error: true
         with:
           path: "./backend"
-
       - name: Installer Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
-
       - name: Scan Trivy du code (SCA + vuln + secrets)
         run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
         continue-on-error: true
@@ -116,7 +96,7 @@ jobs:
   construction_et_deploiement:
     name: Construction, scan & déploiement des images Docker
     runs-on: ubuntu-latest
-    needs: [controle_qualite]
+    needs: controle_qualite
     if: github.event_name != 'schedule'
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -179,7 +159,7 @@ jobs:
   deploy_cluster:
     name: Déploiement du cluster (Docker Swarm)
     runs-on: self-hosted
-    needs: [construction_et_deploiement]
+    needs: construction_et_deploiement
     env:
       ADMIN_USER: ${{ secrets.ADMIN_USER }}
       ADMIN_IP: ${{ secrets.ADMIN_IP }}
@@ -210,7 +190,7 @@ jobs:
   cluster_healthcheck:
     name: Vérification santé du cluster et logs
     runs-on: self-hosted
-    needs: [deploy_cluster]
+    needs: deploy_cluster
     env:
       ADMIN_USER: ${{ secrets.ADMIN_USER }}
       ADMIN_IP: ${{ secrets.ADMIN_IP }}
