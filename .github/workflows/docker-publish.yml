@@ -43,23 +43,20 @@ jobs:
           echo "Corrige l’erreur puis relance le workflow si besoin."
 
   controle_qualite:
-    name: Contrôle qualité et tests (Trivy, Bandit, Flake8, Pytest)
+    name: Contrôle qualité et tests (Pytest, Bandit, Flake8, Trivy)
     runs-on: ubuntu-latest
     needs: mise_a_jour_backend
     if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@v3
 
-      - name: Installer Trivy
+      - name: Installer les dépendances Python
         run: |
-          sudo apt-get update && sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
-          sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
+          pip install -r backend/requirements.txt
+          pip install pytest
 
-      - name: Scan Trivy du code (SCA + vuln + secrets)
-        run: |
-          trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
-        continue-on-error: true
+      - name: Lancer Pytest
+        run: pytest backend/tests
 
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
@@ -73,13 +70,16 @@ jobs:
         with:
           path: "./backend"
 
-      - name: Installer les dépendances Python
+      - name: Installer Trivy
         run: |
-          pip install -r backend/requirements.txt
-          pip install pytest
+          sudo apt-get update && sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
 
-      - name: Lancer Pytest
-        run: pytest backend/tests || true
+      - name: Scan Trivy du code (SCA + vuln + secrets)
+        run: |
+          trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
+        continue-on-error: true
 
   construction_et_deploiement:
     name: Construction, scan & déploiement des images Docker
