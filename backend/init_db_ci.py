@@ -25,7 +25,7 @@ def wait_for_db(host, port, user, password, dbname, timeout=60):
 
 if __name__ == "__main__":
     host = os.getenv("DB_HOST", "db")
-    port = os.getenv("DB_PORT", 5432)
+    port = int(os.getenv("DB_PORT", 5432))  # Assure que c'est un int
     user = os.getenv("DB_USER", "postgres")
     password = os.getenv("DB_PASSWORD", "postgres")
     dbname = os.getenv("DB_NAME", "logmeindb")
