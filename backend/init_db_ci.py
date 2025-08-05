@@ -1,22 +1,36 @@
 import time
-from app import init_db, get_db_connection
+from app import init_db
+import os
+import psycopg2
 
-def wait_for_db(max_retries=10, delay=3):
-    for attempt in range(max_retries):
+def wait_for_db(host, port, user, password, dbname, timeout=60):
+    start = time.time()
+    while time.time() - start < timeout:
         try:
-            conn = get_db_connection()
+            conn = psycopg2.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                dbname=dbname
+            )
             conn.close()
-            print("✅ Base de données disponible.")
+            print("DB is ready.")
             return True
-        except Exception as e:
-            print(f"❌ Tentative {attempt + 1} : DB pas encore dispo, attente {delay}s...")
-            time.sleep(delay)
+        except psycopg2.OperationalError:
+            print("Tentative : DB pas encore dispo, attente 3s...")
+            time.sleep(3)
+    print("La base de données n'est pas disponible, abandon.")
     return False
 
 if __name__ == "__main__":
-    if wait_for_db():
+    host = os.getenv("DB_HOST", "db")
+    port = os.getenv("DB_PORT", 5432)
+    user = os.getenv("DB_USER", "postgres")
+    password = os.getenv("DB_PASSWORD", "postgres")
+    dbname = os.getenv("DB_NAME", "logmeindb")
+
+    if wait_for_db(host, port, user, password, dbname):
         init_db()
-        print("✅ Base de données initialisée avec succès.")
     else:
-        print("❌ La base de données n'est pas disponible, abandon.")
         exit(1)
