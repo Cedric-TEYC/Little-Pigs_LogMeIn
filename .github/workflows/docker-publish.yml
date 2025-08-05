@@ -74,11 +74,8 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest
 
-      - name: Donner les droits d'exécution au script wait-for-it
-        run: chmod +x backend/wait-for-it.sh
-
       - name: Attendre que Postgres soit prêt
-        run: bash backend/wait-for-it.sh db:5432 --timeout=60 --strict -- echo "Postgres is up"
+        run: python backend/wait_for_db.py db 5432 60
 
       - name: Initialiser la base de données
         run: |
