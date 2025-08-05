@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 1'
+    - cron: '0 2 * * 1'  # Lundi à 2h du matin
   workflow_dispatch:
 
 permissions:
@@ -23,8 +23,7 @@ jobs:
       - run: docker build -t local-backend:latest ./backend
       - name: Message de succès
         if: success()
-        run: |
-          echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
+        run: echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
       - name: Message d’erreur
         if: failure()
         run: |
@@ -74,7 +73,9 @@ jobs:
       - name: Initialiser la base de données
         run: python backend/init_db_ci.py
       - name: Lancer Pytest
-        run: pytest backend/tests
+        run: |
+          export PYTHONPATH=backend
+          pytest backend/tests
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
@@ -91,8 +92,7 @@ jobs:
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
       - name: Scan Trivy du code (SCA + vuln + secrets)
-        run: |
-          trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
+        run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
         continue-on-error: true
 
   construction_et_deploiement:
@@ -122,16 +122,13 @@ jobs:
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
       - name: Scanner l’image backend avec Trivy
-        run: |
-          trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-backend.sarif $DOCKERHUB_USERNAME/littlepigs-backend:latest
+        run: trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-backend.sarif $DOCKERHUB_USERNAME/littlepigs-backend:latest
         continue-on-error: true
       - name: Scanner l’image frontend avec Trivy
-        run: |
-          trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
+        run: trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
         continue-on-error: true
       - name: Scanner l’image nginx avec Trivy
-        run: |
-          trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-nginx.sarif $DOCKERHUB_USERNAME/littlepigs-nginx:latest
+        run: trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-nginx.sarif $DOCKERHUB_USERNAME/littlepigs-nginx:latest
         continue-on-error: true
       - name: Pousser l’image backend
         run: docker push $DOCKERHUB_USERNAME/littlepigs-backend:latest
