@@ -23,8 +23,7 @@ jobs:
       - run: docker build -t local-backend:latest ./backend
       - name: Message de succès
         if: success()
-        run: |
-          echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
+        run: echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
       - name: Message d’erreur
         if: failure()
         run: |
@@ -160,7 +159,7 @@ jobs:
   deploy_cluster:
     name: Déploiement du cluster (Docker Swarm)
     runs-on: self-hosted
-    needs: construction_et_deploiement
+    needs: deploy_cluster
     env:
       ADMIN_USER: ${{ secrets.ADMIN_USER }}
       ADMIN_IP: ${{ secrets.ADMIN_IP }}
