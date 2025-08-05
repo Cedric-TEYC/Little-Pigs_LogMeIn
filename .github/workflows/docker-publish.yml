@@ -56,7 +56,7 @@ jobs:
           pip install pytest
 
       - name: Lancer Pytest
-        run: pytest backend/tests
+        run: PYTHONPATH=backend pytest backend/tests
 
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
