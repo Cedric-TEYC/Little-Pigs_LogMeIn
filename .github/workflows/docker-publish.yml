@@ -58,61 +58,50 @@ jobs:
       DB_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v3
-
-      - name: Vérifier la résolution DNS de db
-        run: |
-          for i in {1..10}; do
-            if nslookup db; then
-              echo "✅ DNS résolu"
-              break
-            else
-              echo "Attente résolution DNS db..."
-              sleep 3
-            fi
-          done
-
-      - name: Attendre que la DB soit UP (wait-for-it.sh)
-        run: |
-          chmod +x backend/wait-for-it.sh
-          ./backend/wait-for-it.sh db:5432 --timeout=180 --strict -- echo "Postgres is up"
-
       - name: Installer Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Installer dépendances Python
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest psycopg2-binary
-
-      - name: Initialiser la base de données (init_db)
+      - name: Vérifier que Postgres est healthy
+        run: |
+          for i in {1..30}; do
+            status=$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.db.id }})
+            if [[ "$status" == "healthy" ]]; then
+              echo "Postgres est prêt."
+              exit 0
+            else
+              echo "Attente Postgres health check... ($i/30)"
+              sleep 5
+            fi
+          done
+          echo "Postgres n'est pas prêt après timeout."
+          exit 1
+      - name: Initialiser la base de données (direct)
         run: python backend/init_db_ci.py
-
       - name: Lancer Pytest
         run: |
           export PYTHONPATH=backend
           pytest backend/tests
-
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
         with:
           targets: "./backend"
-
       - name: Linter Flake8
         uses: py-actions/flake8@v2
         continue-on-error: true
         with:
           path: "./backend"
-
       - name: Installer Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
-
       - name: Scan Trivy du code (SCA + vuln + secrets)
         run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
         continue-on-error: true
