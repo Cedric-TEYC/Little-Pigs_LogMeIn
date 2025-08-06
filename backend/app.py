@@ -44,7 +44,6 @@ def get_client_ip():
 
 def get_geo_location(ip):
     try:
-        # Ignore local/Docker IPs
         if ip.startswith('172.') or ip.startswith('127.') or ip == '::1':
             return 'Inconnue'
         resp = requests.get(f"https://ipapi.co/{ip}/json/")
@@ -173,7 +172,6 @@ def health_response():
         'version': '1.0'
     }
 
-    # Si "?html=1", retourne version HTML bien lisible
     if request.args.get('html') == '1':
         return render_template_string("""
         <html>
@@ -200,7 +198,6 @@ def health_response():
         </html>
         """, db=db_ok, status=status, version=result['version'])
     else:
-        # JSON pretty-print pour le navigateur
         return app.response_class(
             response=json.dumps(result, indent=4),
             status=200,

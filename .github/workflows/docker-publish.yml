@@ -23,8 +23,7 @@ jobs:
       - run: docker build -t local-backend:latest ./backend
       - name: Message de succès
         if: success()
-        run: |
-          echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
+        run: echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
       - name: Message d’erreur
         if: failure()
         run: |
@@ -49,7 +48,7 @@ jobs:
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 15
     env:
       DB_HOST: db
       DB_PORT: 5432
@@ -58,24 +57,23 @@ jobs:
       DB_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v3
-      
-      - name: Vérifier que le hostname db est resolvable (DNS)
+
+      - name: Vérifier la résolution DNS de db
         run: |
           for i in {1..10}; do
             if nslookup db; then
-              echo "✅ db est resolvable."
+              echo "✅ DNS résolu"
               break
             else
-              echo "Attente de la résolution DNS du hostname db..."
+              echo "Attente résolution DNS db..."
               sleep 3
             fi
           done
 
-      - name: Donner les droits d'exécution au script wait-for-it.sh
-        run: chmod +x backend/wait-for-it.sh
-
-      - name: Attendre que la DB soit UP (wait-for-it)
-        run: bash backend/wait-for-it.sh db:5432 --timeout=120 --strict -- echo "Postgres is up"
+      - name: Attendre que la DB soit UP (wait-for-it.sh)
+        run: |
+          chmod +x backend/wait-for-it.sh
+          ./backend/wait-for-it.sh db:5432 --timeout=180 --strict -- echo "Postgres is up"
 
       - name: Installer Python 3.11
         uses: actions/setup-python@v5
