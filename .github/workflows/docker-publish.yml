@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 2 * * 1'
+    - cron: '0 2 * * 1'  # Lundi 2h du matin
   workflow_dispatch:
 
 permissions:
@@ -67,22 +67,8 @@ jobs:
           pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest psycopg2-binary
-      - name: Vérifier que Postgres est healthy
-        run: |
-          for i in {1..30}; do
-            status=$(docker inspect --format='{{.State.Health.Status}}' ${{ job.services.db.id }})
-            if [[ "$status" == "healthy" ]]; then
-              echo "Postgres est prêt."
-              exit 0
-            else
-              echo "Attente Postgres health check... ($i/30)"
-              sleep 5
-            fi
-          done
-          echo "Postgres n'est pas prêt après timeout."
-          exit 1
-      - name: Initialiser la base de données (direct)
-        run: python backend/init_db_ci.py
+      - name: Attendre que la DB soit UP
+        run: bash backend/wait-for-it.sh db:5432 --timeout=120 --strict -- echo "Postgres is up"
       - name: Lancer Pytest
         run: |
           export PYTHONPATH=backend

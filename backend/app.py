@@ -44,6 +44,7 @@ def get_client_ip():
 
 def get_geo_location(ip):
     try:
+        # Ignore local/Docker IPs
         if ip.startswith('172.') or ip.startswith('127.') or ip == '::1':
             return 'Inconnue'
         resp = requests.get(f"https://ipapi.co/{ip}/json/")
