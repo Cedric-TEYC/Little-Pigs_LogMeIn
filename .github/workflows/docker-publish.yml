@@ -58,6 +58,24 @@ jobs:
       DB_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Vérifier que le hostname db est resolvable (DNS)
+        run: |
+          for i in {1..10}; do
+            if nslookup db; then
+              echo "✅ db est resolvable."
+              break
+            else
+              echo "Attente de la résolution DNS du hostname db..."
+              sleep 3
+            fi
+          done
+
+      - name: Donner les droits d'exécution au script wait-for-it.sh
+        run: chmod +x backend/wait-for-it.sh
+
+      - name: Attendre que la DB soit UP (wait-for-it)
+        run: bash backend/wait-for-it.sh db:5432 --timeout=120 --strict -- echo "Postgres is up"
 
       - name: Installer Python 3.11
         uses: actions/setup-python@v5
@@ -69,12 +87,6 @@ jobs:
           pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest psycopg2-binary
-
-      - name: Donner les droits d'exécution au script wait-for-it
-        run: chmod +x backend/wait-for-it.sh
-
-      - name: Attendre que la DB soit UP (wait-for-it)
-        run: bash backend/wait-for-it.sh db:5432 --timeout=60 --strict -- echo "Postgres is up"
 
       - name: Initialiser la base de données (init_db)
         run: python backend/init_db_ci.py
