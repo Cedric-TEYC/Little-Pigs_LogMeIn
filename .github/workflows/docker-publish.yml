@@ -45,7 +45,6 @@ jobs:
           POSTGRES_DB: logmeindb
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-        # ports supprimés car inutiles et souvent bloquants en CI
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -68,6 +67,9 @@ jobs:
           pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest psycopg2-binary
+      - name: Vérifier la résolution DNS de db
+        run: |
+          nslookup db || dig db || ping -c 3 db || exit 1
       - name: Initialiser la base de données (avec attente DB ready)
         run: python backend/init_db_ci.py
       - name: Lancer Pytest
