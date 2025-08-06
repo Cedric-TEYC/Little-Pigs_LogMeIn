@@ -15,26 +15,13 @@ permissions:
 
 jobs:
   mise_a_jour_backend:
-    name: Mise à jour automatique du backend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - run: docker build -t local-backend:latest ./backend
-      - name: Message de succès
-        if: success()
-        run: |
-          echo "✅ Build réussi : les mises à jour du backend se sont bien passées !"
-      - name: Message d’erreur
-        if: failure()
-        run: |
-          echo "❌ Build échoué : une mise à jour a cassé le build du backend."
-          echo "1️⃣ Va dans l’onglet 'Actions' de ton dépôt GitHub."
-          echo "2️⃣ Sélectionne 'Mise à jour automatique du backend'."
-          echo "3️⃣ Clique sur la dernière exécution échouée pour voir les logs détaillés."
 
   controle_qualite:
-    name: Contrôle qualité et tests (Pytest, Bandit, Flake8, Trivy)
     runs-on: ubuntu-latest
     needs: mise_a_jour_backend
     if: github.event_name != 'schedule'
@@ -115,7 +102,6 @@ conn.close()
         continue-on-error: true
 
   construction_et_deploiement:
-    name: Construction, scan & déploiement des images Docker
     runs-on: ubuntu-latest
     needs: controle_qualite
     if: github.event_name != 'schedule'
@@ -167,18 +153,8 @@ conn.close()
         with:
           sarif_file: "trivy-nginx.sarif"
           category: "trivy-nginx"
-      - name: Générer le résumé CI
-        if: always()
-        run: |
-          echo '## Résumé du job CI/CD' >> $GITHUB_STEP_SUMMARY
-          echo '### Image backend: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-backend:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Image frontend: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-frontend:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Image nginx: `${{ env.DOCKERHUB_USERNAME }}/littlepigs-nginx:latest`' >> $GITHUB_STEP_SUMMARY
-          echo '### Scans de sécurité: Trivy, Bandit, Flake8, Pytest' >> $GITHUB_STEP_SUMMARY
-          echo 'Badges visibles dans le README. Rapports complets disponibles dans l’onglet Security de GitHub.'
 
   deploy_cluster:
-    name: Déploiement du cluster (Docker Swarm)
     runs-on: self-hosted
     needs: construction_et_deploiement
     env:
@@ -209,7 +185,6 @@ conn.close()
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
 
   cluster_healthcheck:
-    name: Vérification santé du cluster et logs
     runs-on: self-hosted
     needs: deploy_cluster
     env:
