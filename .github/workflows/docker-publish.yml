@@ -99,7 +99,6 @@ conn.close()
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
       - name: Scan Trivy du code (SCA + vuln + secrets)
         run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
-        continue-on-error: true
 
   construction_et_deploiement:
     runs-on: ubuntu-latest
@@ -128,13 +127,10 @@ conn.close()
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
       - name: Scanner l’image backend avec Trivy
         run: trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-backend.sarif $DOCKERHUB_USERNAME/littlepigs-backend:latest
-        continue-on-error: true
       - name: Scanner l’image frontend avec Trivy
         run: trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-frontend.sarif $DOCKERHUB_USERNAME/littlepigs-frontend:latest
-        continue-on-error: true
       - name: Scanner l’image nginx avec Trivy
         run: trivy image --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format sarif -o trivy-nginx.sarif $DOCKERHUB_USERNAME/littlepigs-nginx:latest
-        continue-on-error: true
       - name: Pousser l’image backend
         run: docker push $DOCKERHUB_USERNAME/littlepigs-backend:latest
       - name: Pousser l’image frontend
