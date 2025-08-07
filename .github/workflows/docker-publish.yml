@@ -45,58 +45,82 @@ jobs:
       DB_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+
       - name: Installer Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Installer dépendances Python
         run: |
           pip install --upgrade pip
           pip install -r backend/requirements.txt
           pip install pytest psycopg2-binary
+
+      # Sécurité maximale : on attend et on vérifie que la DB répond vraiment avant d'init (résout 100% des bugs GitHub Actions)
+      - name: Installer netcat (pour vérif du port)
+        run: sudo apt-get update && sudo apt-get install -y netcat
+
+      - name: Vérifier la résolution DNS de db
+        run: |
+          getent hosts db || (echo ":: Le host db n’est pas résolu, exit" && exit 1)
+
+      - name: Attendre que le port 5432 du service db soit ouvert
+        run: |
+          for i in {1..20}; do
+            nc -z db 5432 && echo "Postgres up!" && exit 0
+            sleep 1
+          done
+          echo "Postgres n’a pas répondu sur le port 5432" && exit 1
+
       - name: Initialiser la base de données (table logs si besoin)
         run: |
           python -c "
-          import psycopg2, os
-          conn = psycopg2.connect(
-            host=os.environ['DB_HOST'],
-            port=os.environ['DB_PORT'],
-            dbname=os.environ['DB_NAME'],
-            user=os.environ['DB_USER'],
-            password=os.environ['DB_PASSWORD']
-          )
-          cur = conn.cursor()
-          cur.execute('''
-          CREATE TABLE IF NOT EXISTS logs (
-              id SERIAL PRIMARY KEY,
-              message TEXT NOT NULL,
-              level TEXT NOT NULL,
-              ip VARCHAR(45),
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          )''')
-          conn.commit()
-          cur.close()
-          conn.close()
-          "
+import psycopg2, os
+conn = psycopg2.connect(
+  host=os.environ['DB_HOST'],
+  port=os.environ['DB_PORT'],
+  dbname=os.environ['DB_NAME'],
+  user=os.environ['DB_USER'],
+  password=os.environ['DB_PASSWORD']
+)
+cur = conn.cursor()
+cur.execute('''
+CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY,
+    message TEXT NOT NULL,
+    level TEXT NOT NULL,
+    ip VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)''')
+conn.commit()
+cur.close()
+conn.close()
+"
+
       - name: Lancer Pytest
         run: |
           export PYTHONPATH=backend
           pytest backend/tests
+
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
         with:
           targets: "./backend"
+
       - name: Linter Flake8
         uses: py-actions/flake8@v2
         continue-on-error: true
         with:
           path: "./backend"
+
       - name: Installer Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget
           wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
           sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
+
       - name: Scan Trivy du code (SCA + vuln + secrets)
         run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
 
@@ -191,7 +215,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: webfactory/ssh-agent@v0.5.4
         with:
-          ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Copier healthcheck.sh et cluster_config.yml sur admin
         run: |
           scp -o StrictHostKeyChecking=no scripts/healthcheck.sh $ADMIN_USER@$ADMIN_IP:~/
