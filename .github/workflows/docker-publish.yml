@@ -70,31 +70,31 @@ jobs:
           done
           echo "Postgres n’a pas répondu sur le port 5432" && exit 1
 
-      - name: Initialiser la base de données (table logs si besoin)
+      - name: Générer le script d'init DB (YAML friendly)
         run: |
-          cat << EOF > init_db.py
-import psycopg2, os
-conn = psycopg2.connect(
-    host=os.environ['DB_HOST'],
-    port=os.environ['DB_PORT'],
-    dbname=os.environ['DB_NAME'],
-    user=os.environ['DB_USER'],
-    password=os.environ['DB_PASSWORD']
-)
-cur = conn.cursor()
-cur.execute('''
-CREATE TABLE IF NOT EXISTS logs (
-    id SERIAL PRIMARY KEY,
-    message TEXT NOT NULL,
-    level TEXT NOT NULL,
-    ip VARCHAR(45),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-)''')
-conn.commit()
-cur.close()
-conn.close()
-EOF
-          python init_db.py
+          echo "import psycopg2, os" > init_db.py
+          echo "conn = psycopg2.connect(" >> init_db.py
+          echo "    host=os.environ['DB_HOST']," >> init_db.py
+          echo "    port=os.environ['DB_PORT']," >> init_db.py
+          echo "    dbname=os.environ['DB_NAME']," >> init_db.py
+          echo "    user=os.environ['DB_USER']," >> init_db.py
+          echo "    password=os.environ['DB_PASSWORD']" >> init_db.py
+          echo ")" >> init_db.py
+          echo "cur = conn.cursor()" >> init_db.py
+          echo "cur.execute('''" >> init_db.py
+          echo "CREATE TABLE IF NOT EXISTS logs (" >> init_db.py
+          echo "    id SERIAL PRIMARY KEY," >> init_db.py
+          echo "    message TEXT NOT NULL," >> init_db.py
+          echo "    level TEXT NOT NULL," >> init_db.py
+          echo "    ip VARCHAR(45)," >> init_db.py
+          echo "    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP" >> init_db.py
+          echo ")''')" >> init_db.py
+          echo "conn.commit()" >> init_db.py
+          echo "cur.close()" >> init_db.py
+          echo "conn.close()" >> init_db.py
+
+      - name: Initialiser la base de données (table logs si besoin)
+        run: python init_db.py
 
       - name: Lancer Pytest (log détaillé)
         run: |
