@@ -23,7 +23,7 @@ jobs:
 
   controle_qualite:
     runs-on: ubuntu-latest
-    needs: Mise_a_jour_backend
+    needs: mise_a_jour_backend
     if: github.event_name != 'schedule'
     services:
       db:
@@ -37,6 +37,8 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
+        ports:
+          - 5432:5432
     env:
       DB_HOST: 127.0.0.1
       DB_PORT: 5432
@@ -57,18 +59,13 @@ jobs:
           pip install -r backend/requirements.txt
           pip install pytest psycopg2-binary
 
-      # Sécurité maximale : on attend et on vérifie que la DB répond vraiment avant d'init (résout 100% des bugs GitHub Actions)
       - name: Installer netcat (pour vérif du port)
         run: sudo apt-get update && sudo apt-get install -y netcat-openbsd
-
-      - name: Vérifier la résolution DNS de db
-        run: |
-          getent hosts db || (echo ":: Le host db n’est pas résolu, exit" && exit 1)
 
       - name: Attendre que le port 5432 du service db soit ouvert
         run: |
           for i in {1..20}; do
-            nc -z db 5432 && echo "Postgres up!" && exit 0
+            nc -z 127.0.0.1 5432 && echo "Postgres up!" && exit 0
             sleep 1
           done
           echo "Postgres n’a pas répondu sur le port 5432" && exit 1
@@ -78,11 +75,11 @@ jobs:
           python -c "
           import psycopg2, os
           conn = psycopg2.connect(
-            host=os.environ['DB_HOST'],
-            port=os.environ['DB_PORT'],
-            dbname=os.environ['DB_NAME'],
-            user=os.environ['DB_USER'],
-            password=os.environ['DB_PASSWORD']
+              host=os.environ['DB_HOST'],
+              port=os.environ['DB_PORT'],
+              dbname=os.environ['DB_NAME'],
+              user=os.environ['DB_USER'],
+              password=os.environ['DB_PASSWORD']
           )
           cur = conn.cursor()
           cur.execute('''
@@ -98,10 +95,10 @@ jobs:
           conn.close()
           "
 
-                - name: Lancer Pytest
+                - name: Lancer Pytest (log détaillé)
                   run: |
                     export PYTHONPATH=backend
-                    pytest backend/tests
+                    pytest -v backend/tests
 
                 - name: Analyse Bandit (Python)
                   uses: tj-actions/bandit@v5
