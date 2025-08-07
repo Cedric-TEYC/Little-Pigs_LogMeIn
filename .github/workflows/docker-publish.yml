@@ -72,7 +72,7 @@ jobs:
 
       - name: Initialiser la base de données (table logs si besoin)
         run: |
-          python -c "
+          cat << EOF > init_db.py
           import psycopg2, os
           conn = psycopg2.connect(
               host=os.environ['DB_HOST'],
