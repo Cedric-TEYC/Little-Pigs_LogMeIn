@@ -73,54 +73,54 @@ jobs:
       - name: Initialiser la base de données (table logs si besoin)
         run: |
           cat << EOF > init_db.py
-          import psycopg2, os
-          conn = psycopg2.connect(
-              host=os.environ['DB_HOST'],
-              port=os.environ['DB_PORT'],
-              dbname=os.environ['DB_NAME'],
-              user=os.environ['DB_USER'],
-              password=os.environ['DB_PASSWORD']
-          )
-          cur = conn.cursor()
-          cur.execute('''
-          CREATE TABLE IF NOT EXISTS logs (
-              id SERIAL PRIMARY KEY,
-              message TEXT NOT NULL,
-              level TEXT NOT NULL,
-              ip VARCHAR(45),
-              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          )''')
-          conn.commit()
-          cur.close()
-          conn.close()
-          EOF
-                    python init_db.py
+import psycopg2, os
+conn = psycopg2.connect(
+    host=os.environ['DB_HOST'],
+    port=os.environ['DB_PORT'],
+    dbname=os.environ['DB_NAME'],
+    user=os.environ['DB_USER'],
+    password=os.environ['DB_PASSWORD']
+)
+cur = conn.cursor()
+cur.execute('''
+CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY,
+    message TEXT NOT NULL,
+    level TEXT NOT NULL,
+    ip VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)''')
+conn.commit()
+cur.close()
+conn.close()
+EOF
+          python init_db.py
 
-                - name: Lancer Pytest (log détaillé)
-                  run: |
-                    export PYTHONPATH=backend
-                    pytest -v backend/tests
+      - name: Lancer Pytest (log détaillé)
+        run: |
+          export PYTHONPATH=backend
+          pytest -v backend/tests
 
-                - name: Analyse Bandit (Python)
-                  uses: tj-actions/bandit@v5
-                  continue-on-error: true
-                  with:
-                    targets: "./backend"
+      - name: Analyse Bandit (Python)
+        uses: tj-actions/bandit@v5
+        continue-on-error: true
+        with:
+          targets: "./backend"
 
-                - name: Linter Flake8
-                  uses: py-actions/flake8@v2
-                  continue-on-error: true
-                  with:
-                    path: "./backend"
+      - name: Linter Flake8
+        uses: py-actions/flake8@v2
+        continue-on-error: true
+        with:
+          path: "./backend"
 
-                - name: Installer Trivy
-                  run: |
-                    sudo apt-get update && sudo apt-get install -y wget
-                    wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
-                    sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
+      - name: Installer Trivy
+        run: |
+          sudo apt-get update && sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.50.2/trivy_0.50.2_Linux-64bit.deb
+          sudo dpkg -i trivy_0.50.2_Linux-64bit.deb
 
-                - name: Scan Trivy du code (SCA + vuln + secrets)
-                  run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
+      - name: Scan Trivy du code (SCA + vuln + secrets)
+        run: trivy fs --exit-code 0 --severity CRITICAL,HIGH,MEDIUM --format table --scanners vuln,secret,config .
 
   construction_et_deploiement:
     runs-on: ubuntu-latest
