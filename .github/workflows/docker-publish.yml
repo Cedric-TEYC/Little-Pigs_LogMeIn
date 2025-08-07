@@ -23,7 +23,7 @@ jobs:
 
   controle_qualite:
     runs-on: ubuntu-latest
-    needs: mise_a_jour_backend
+    needs: Mise_a_jour_backend
     if: github.event_name != 'schedule'
     services:
       db:
@@ -38,7 +38,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      DB_HOST: db
+      DB_HOST: 127.0.0.1
       DB_PORT: 5432
       DB_NAME: logmeindb
       DB_USER: postgres
