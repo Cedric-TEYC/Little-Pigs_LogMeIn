@@ -12,6 +12,7 @@ DB_NAME = os.environ.get('DB_NAME', 'logmeindb')
 DB_USER = os.environ.get('DB_USER', 'postgres')
 DB_PASSWORD = os.environ.get('DB_PASSWORD', 'postgres')
 
+
 def get_db_connection():
     return psycopg2.connect(
         host=DB_HOST,
@@ -20,6 +21,7 @@ def get_db_connection():
         user=DB_USER,
         password=DB_PASSWORD
     )
+
 
 def init_db():
     conn = get_db_connection()
@@ -37,17 +39,19 @@ def init_db():
     cur.close()
     conn.close()
 
+
 def get_client_ip():
     if request.headers.get('X-Forwarded-For'):
         return request.headers.get('X-Forwarded-For').split(',')[0].strip()
     return request.remote_addr
+
 
 def get_geo_location(ip):
     try:
         # Ignore local/Docker IPs
         if ip.startswith('172.') or ip.startswith('127.') or ip == '::1':
             return 'Inconnue'
-        resp = requests.get(f"https://ipapi.co/{ip}/json/")
+        resp = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5)
         if resp.status_code == 200:
             data = resp.json()
             city = data.get('city', '')
@@ -56,6 +60,7 @@ def get_geo_location(ip):
         return 'Inconnue'
     except Exception:
         return 'Inconnue'
+
 
 @app.route('/api/logs', methods=['GET', 'POST'])
 def logs():
@@ -66,7 +71,10 @@ def logs():
         ip = get_client_ip()
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("INSERT INTO logs (message, level, ip) VALUES (%s, %s, %s)", (message, level, ip))
+        cur.execute(
+            "INSERT INTO logs (message, level, ip) VALUES (%s, %s, %s)",
+            (message, level, ip)
+        )
         conn.commit()
         cur.close()
         conn.close()
@@ -74,7 +82,9 @@ def logs():
     else:
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT id, message, level, ip, created_at FROM logs ORDER BY created_at DESC")
+        cur.execute(
+            "SELECT id, message, level, ip, created_at FROM logs ORDER BY created_at DESC"
+        )
         logs = cur.fetchall()
         cur.close()
         conn.close()
@@ -134,6 +144,7 @@ def logs():
         else:
             return jsonify(logs_list)
 
+
 @app.route('/api/logs/clear', methods=['DELETE'])
 def clear_logs():
     conn = get_db_connection()
@@ -144,6 +155,7 @@ def clear_logs():
     conn.close()
     return jsonify({'status': 'logs cleared'})
 
+
 @app.route('/api/stats', methods=['GET'])
 def stats():
     conn = get_db_connection()
@@ -153,6 +165,7 @@ def stats():
     cur.close()
     conn.close()
     return jsonify({'log_count': count})
+
 
 def health_response():
     try:
@@ -205,13 +218,16 @@ def health_response():
             mimetype='application/json'
         )
 
+
 @app.route('/api/health', methods=['GET'])
 def api_health():
     return health_response()
 
+
 @app.route('/health', methods=['GET'])
 def root_health():
     return health_response()
+
 
 if __name__ == '__main__':
     init_db()

@@ -1,5 +1,8 @@
 FROM python:3.11-slim
 
+# Ajout utilisateur non-root (recommandé sécurité)
+RUN useradd -ms /bin/bash appuser
+
 WORKDIR /app
 
 # MAJ OS et nettoyage
@@ -14,5 +17,7 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir --upgrade -r requirements.txt
 
 COPY . .
+
+USER appuser
 
 CMD ["python", "app.py"]

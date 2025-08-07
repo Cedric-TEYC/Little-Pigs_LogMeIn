@@ -101,6 +101,10 @@ jobs:
           export PYTHONPATH=backend
           pytest -v backend/tests
 
+      - name: Tests passés avec succès 
+        if: success()
+        run: echo "✅ Tous les tests Pytest sont passés avec succès !"
+
       - name: Analyse Bandit (Python)
         uses: tj-actions/bandit@v5
         continue-on-error: true
