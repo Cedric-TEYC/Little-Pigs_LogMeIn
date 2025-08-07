@@ -59,7 +59,7 @@ jobs:
 
       # Sécurité maximale : on attend et on vérifie que la DB répond vraiment avant d'init (résout 100% des bugs GitHub Actions)
       - name: Installer netcat (pour vérif du port)
-        run: sudo apt-get update && sudo apt-get install -y netcat
+        run: sudo apt-get update && sudo apt-get install -y netcat-openbsd
 
       - name: Vérifier la résolution DNS de db
         run: |
