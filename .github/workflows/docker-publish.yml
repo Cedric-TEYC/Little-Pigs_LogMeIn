@@ -206,34 +206,6 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
 
-      # ======= AJOUT UNIQUE ICI : patch read-only sur master, avec retries anti 'update out of sequence' =======
-      - name: Patch read-only (nginx + frontend) via admin→master (retries)
-        run: |
-          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP 'bash -s' <<'ADMIN'
-          set -euo pipefail
-          MASTER_IP=$(yq e '.nodes.master.ip' ~/cluster_config.yml)
-          MASTER_USER=$(yq e '.nodes.master.user' ~/cluster_config.yml)
-          KEY=~/.ssh/id_ed25519_github
-          CMD='sudo docker service update --read-only=false --force'
-
-          update_service() {
-            local svc="$1"
-            local attempt=1
-            until ssh -i "$KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "$CMD $svc"; do
-              code=$?
-              echo "⚠️ update '$svc' tentative $attempt échouée (code $code). Retry dans 5s…"
-              sleep 5
-              attempt=$((attempt+1))
-              [ $attempt -le 24 ] || { echo "❌ Abandon après 24 tentatives."; exit 1; }
-            done
-            echo "✅ $svc patché (read-only=false)."
-          }
-
-          update_service littlepigs_nginx
-          update_service littlepigs_frontend
-          ADMIN
-      # ======= FIN AJOUT =======
-
   cluster_healthcheck:
     runs-on: self-hosted
     needs: deploy_cluster
