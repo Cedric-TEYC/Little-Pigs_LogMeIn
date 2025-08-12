@@ -205,6 +205,18 @@ jobs:
       - name: Lancer le script de déploiement
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
+      - name: Vérifier accès HTTP sur master et workers
+        run: |
+          MASTER_IP=$(ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "yq e '.nodes.master.ip' cluster_config.yml")
+          WORKERS_IPS=($(ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "yq e '.nodes.workers[].ip' cluster_config.yml"))
+
+          echo "🔍 Test HTTP sur master..."
+          curl -s -o /dev/null -w "%{http_code}\n" http://$MASTER_IP:3000 | grep -q "^200$" && echo "✅ Master OK" || (echo "❌ Master KO" && exit 1)
+
+          for IP in "${WORKERS_IPS[@]}"; do
+            echo "🔍 Test HTTP sur worker $IP..."
+            curl -s -o /dev/null -w "%{http_code}\n" http://$IP:3000 | grep -q "^200$" && echo "✅ Worker $IP OK" || (echo "❌ Worker $IP KO" && exit 1)
+          done
 
   cluster_healthcheck:
     runs-on: self-hosted
