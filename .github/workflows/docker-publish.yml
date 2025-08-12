@@ -185,6 +185,7 @@ jobs:
       SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
@@ -209,18 +210,49 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
 
-      # ====== SEULE NOUVELLE ÉTAPE : applique les 2 commandes read-only=false sur le master ======
-      - name: Fix post-déploiement (read-only=false sur nginx & frontend)
+      # === AJOUT UNIQUEMENT CETTE ÉTAPE ===
+      - name: Post-déploiement – désactiver read-only (nginx & frontend) avec attente
         run: |
-          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "\
-            MASTER_IP=\$(yq e '.nodes.master.ip' ~/cluster_config.yml); \
-            MASTER_USER=\$(yq e '.nodes.master.user' ~/cluster_config.yml); \
-            ssh -i ~/.ssh/id_ed25519_github -o StrictHostKeyChecking=no \$MASTER_USER@\$MASTER_IP '\
-              sudo docker service update --read-only=false --force littlepigs_nginx && \
-              sudo docker service update --read-only=false --force littlepigs_frontend \
-            '; \
-          "
-      # ============================================================================================
+          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP '
+            set -e
+            MASTER_IP=$(yq e ".nodes.master.ip" ~/cluster_config.yml)
+            MASTER_USER=$(yq e ".nodes.master.user" ~/cluster_config.yml)
+            ssh -i ~/.ssh/id_ed25519_github -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" bash -s << "EOF"
+            set -e
+            wait_ready() {
+              svc="$1"
+              echo "⏳ Attente que $svc soit prêt..."
+              for i in {1..60}; do
+                RUN=$(sudo docker service ps "$svc" --format "{{.CurrentState}}" | grep -c Running || true)
+                TOT=$(sudo docker service ps "$svc" --format "{{.CurrentState}}" | wc -l | tr -d " " || true)
+                if [ "$TOT" -gt 0 ] && [ "$RUN" -eq "$TOT" ]; then
+                  echo "✔ $svc prêt ($RUN/$TOT Running)"
+                  return 0
+                fi
+                sleep 2
+              done
+              echo "⚠ Timeout d'attente pour $svc, tentative d'update quand même."
+              return 0
+            }
+            for s in littlepigs_nginx littlepigs_frontend; do
+              wait_ready "$s"
+            done
+            try_update() {
+              svc="$1"
+              for a in 1 2 3; do
+                if sudo docker service update --read-only=false --force "$svc"; then
+                  echo "✔ Update OK sur $svc"
+                  return 0
+                fi
+                echo "retry $a/3 dans 3s (update out of sequence ?)"
+                sleep 3
+              done
+              exit 1
+            }
+            try_update littlepigs_nginx
+            try_update littlepigs_frontend
+            EOF
+          '
 
   cluster_healthcheck:
     runs-on: self-hosted
