@@ -229,4 +229,3 @@ jobs:
         run: |
           scp -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP:~/cluster_health.log ./cluster_health.log
           cat ./cluster_health.log
-#Pour test

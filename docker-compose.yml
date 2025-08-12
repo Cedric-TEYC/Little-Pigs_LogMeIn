@@ -13,28 +13,13 @@ services:
       mode: global
       placement:
         constraints:
-          - node.role == manager    # DB que sur le manager
+          - node.role == manager   # DB que sur le manager !
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
-      update_config:
-        failure_action: rollback
-        order: start-first
       resources:
         limits:
           cpus: "0.5"
           memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d $${POSTGRES_DB} || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
-    stop_grace_period: 20s
 
   backend:
     image: cedricteyc/littlepigs-backend:latest
@@ -50,93 +35,65 @@ services:
       mode: global
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
-      update_config:
-        failure_action: rollback
-        order: start-first
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:5000/api/stats >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 4s
-      retries: 5
-      start_period: 15s
-    stop_grace_period: 15s
 
   frontend:
+    # Image basée sur nginx => a besoin d'écrire dans /var/cache/nginx et /var/run
     image: cedricteyc/littlepigs-frontend:latest
-    # Images basées sur nginx : besoin d'écriture sur /var/cache/nginx et /var/run
-    read_only: false
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
     deploy:
       mode: global
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
-      update_config:
-        failure_action: rollback
-        order: start-first
       resources:
         limits:
           cpus: "0.25"
           memory: 128M
-        reservations:
-          cpus: "0.05"
-          memory: 64M
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 4s
-      retries: 5
-      start_period: 10s
-    stop_grace_period: 10s
+    user: "0:0"
+    read_only: false
+    volumes:
+      - type: tmpfs
+        target: /var/cache/nginx
+        tmpfs:
+          size: 67108864   # 64 MiB
+          mode: 1777
+      - type: tmpfs
+        target: /var/run
+        tmpfs:
+          size: 16777216   # 16 MiB
+          mode: 1777
 
   nginx:
     image: cedricteyc/littlepigs-nginx:latest
     depends_on:
       - frontend
       - backend
-    # Swarm publie via le mesh ingress
+    # Swarm publie le port 3000 sur tous les nœuds via le mesh ingress
     ports:
       - "3000:80"
-    # Images basées sur nginx : idem
-    read_only: false
-    tmpfs:
-      - /var/cache/nginx
-      - /var/run
     deploy:
       mode: global
       restart_policy:
         condition: on-failure
-        delay: 5s
-        max_attempts: 5
-      update_config:
-        failure_action: rollback
-        order: start-first
       resources:
         limits:
           cpus: "0.5"
           memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 4s
-      retries: 5
-      start_period: 10s
-    stop_grace_period: 10s
+    user: "0:0"
+    read_only: false
+    volumes:
+      - type: tmpfs
+        target: /var/cache/nginx
+        tmpfs:
+          size: 67108864   # 64 MiB
+          mode: 1777
+      - type: tmpfs
+        target: /var/run
+        tmpfs:
+          size: 16777216   # 16 MiB
+          mode: 1777
 
 volumes:
   pgdata:
