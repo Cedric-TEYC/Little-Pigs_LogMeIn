@@ -1,73 +1,126 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 CLUSTER_CONFIG="cluster_config.yml"
-SSH_KEY="~/.ssh/id_ed25519_github" # Utilise toujours cette clé
+SSH_KEY="${SSH_KEY:-~/.ssh/id_ed25519_github}" # Utilise toujours cette clé, override possible via env
+SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no"
 
-# Récupérer IP/user master + arrays pour workers depuis le YAML sur l'admin
-MASTER_IP=$(yq e '.nodes.master.ip' $CLUSTER_CONFIG)
-MASTER_USER=$(yq e '.nodes.master.user' $CLUSTER_CONFIG)
-WORKERS_IPS=($(yq e '.nodes.workers[].ip' $CLUSTER_CONFIG))
-WORKERS_USERS=($(yq e '.nodes.workers[].user' $CLUSTER_CONFIG))
+log() { echo -e "[$(date +'%Y-%m-%d %H:%M:%S')] $*"; }
 
-# 1. Copier cluster_config.yml et docker-compose.yml de l'admin vers le master
-scp -i $SSH_KEY -o StrictHostKeyChecking=no "$CLUSTER_CONFIG" "$MASTER_USER@$MASTER_IP:~/"
-scp -i $SSH_KEY -o StrictHostKeyChecking=no docker-compose.yml "$MASTER_USER@$MASTER_IP:~/"
+ssh_run() {
+  local user_host="$1"; shift
+  ssh $SSH_OPTS "$user_host" "$@"
+}
 
-# 2. Préparer tous les nodes (yq + Docker install)
+scp_put() {
+  local src="$1" dst="$2"
+  scp $SSH_OPTS "$src" "$dst"
+}
+
+# --- Lire la conf cluster ----------------------------------------------------
+MASTER_IP=$(yq e '.nodes.master.ip' "$CLUSTER_CONFIG")
+MASTER_USER=$(yq e '.nodes.master.user' "$CLUSTER_CONFIG")
+readarray -t WORKERS_IPS   < <(yq e '.nodes.workers[].ip' "$CLUSTER_CONFIG")
+readarray -t WORKERS_USERS < <(yq e '.nodes.workers[].user' "$CLUSTER_CONFIG")
+
+MASTER="$MASTER_USER@$MASTER_IP"
+
+# --- 1) Copier conf et stack sur le master ----------------------------------
+scp_put "$CLUSTER_CONFIG" "$MASTER:~/"
+scp_put "docker-compose.yml" "$MASTER:~/"
+
+# --- 2) Préparer tous les nodes (yq + Docker) --------------------------------
 prepare_node() {
-  local ip=$1
-  local user=$2
-  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$user@$ip" "
-    if ! command -v yq &> /dev/null; then
+  local ip="$1" user="$2"
+  log "Préparation node $user@$ip"
+  ssh_run "$user@$ip" '
+    set -e
+    if ! command -v yq >/dev/null 2>&1; then
       wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O yq
-      chmod +x yq
-      sudo mv yq /usr/local/bin/yq
+      chmod +x yq && sudo mv yq /usr/local/bin/yq
     fi
-    if ! command -v docker &> /dev/null; then
+    if ! command -v docker >/dev/null 2>&1; then
       sudo apt update && sudo apt install -y ca-certificates curl gnupg
       sudo install -m 0755 -d /etc/apt/keyrings
       curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-      echo \"deb [arch=\$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \$(lsb_release -cs) stable\" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+        | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
       sudo apt update
       sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
       sudo systemctl enable docker
       sudo systemctl start docker
     fi
-  "
+  '
 }
-
 prepare_node "$MASTER_IP" "$MASTER_USER"
 for i in "${!WORKERS_IPS[@]}"; do
   prepare_node "${WORKERS_IPS[$i]}" "${WORKERS_USERS[$i]}"
 done
 
-# 3. Init swarm sur master
+# --- 3) Init Swarm sur master ------------------------------------------------
 init_swarm() {
-  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "
-    if ! sudo docker info | grep 'Swarm: active' &> /dev/null; then
+  log "Initialisation du Swarm (master=$MASTER_IP)"
+  ssh_run "$MASTER" "
+    if ! sudo docker info 2>/dev/null | grep -q 'Swarm: active'; then
       sudo docker swarm init --advertise-addr $MASTER_IP
     fi
   "
 }
+init_swarm
 
-# 4. Join des workers (depuis admin-auto, plus jamais de nested SSH !)
+# --- 4) Join des workers -----------------------------------------------------
 join_workers() {
-  TOKEN=$(ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker swarm join-token worker -q")
+  log "Join des workers"
+  local token
+  token=$(ssh_run "$MASTER" "sudo docker swarm join-token worker -q")
   for i in "${!WORKERS_IPS[@]}"; do
-    IP="${WORKERS_IPS[$i]}"
-    USER="${WORKERS_USERS[$i]}"
-    ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$USER@$IP" "sudo docker swarm join --token $TOKEN $MASTER_IP:2377" || echo "Worker $IP already joined or failed"
+    local ip="${WORKERS_IPS[$i]}"
+    local user="${WORKERS_USERS[$i]}"
+    log " -> $user@$ip"
+    ssh_run "$user@$ip" "sudo docker swarm join --token $token $MASTER_IP:2377" \
+      || log "   (déjà joint ou échec non bloquant)"
   done
 }
-
-# 5. Déploiement du stack sur le master
-deploy_stack() {
-  ssh -i $SSH_KEY -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "sudo docker stack deploy -c ~/docker-compose.yml littlepigs"
-}
-
-echo "Starting cluster deployment..."
-init_swarm
 join_workers
+
+# --- 5) Déploiement du stack -------------------------------------------------
+deploy_stack() {
+  log "Déploiement du stack 'littlepigs'"
+  ssh_run "$MASTER" "sudo docker stack deploy -c ~/docker-compose.yml littlepigs"
+}
 deploy_stack
-echo "Deployment complete."
+
+# --- 6) Post-déploiement: durcissement nginx / frontend ----------------------
+post_hardening() {
+  log "Post-déploiement: ajout tmpfs + désactivation read-only si besoin"
+
+  ensure_tmpfs_mount() {
+    local svc="$1" target="$2"
+    # Ajoute un mount tmpfs; si déjà présent, Docker ignore le doublon
+    ssh_run "$MASTER" "sudo docker service update --mount-add type=tmpfs,target=$target $svc" || true
+  }
+
+  disable_readonly() {
+    local svc="$1"
+    ssh_run "$MASTER" "sudo docker service update --read-only=false $svc" || true
+  }
+
+  tune_service() {
+    local svc="$1"
+    disable_readonly "$svc"
+    ensure_tmpfs_mount "$svc" "/var/cache/nginx"
+    ensure_tmpfs_mount "$svc" "/var/run"
+  }
+
+  # Services concernés (images basées sur nginx)
+  tune_service "littlepigs_nginx"
+  tune_service "littlepigs_frontend"
+
+  log "État des services après durcissement :"
+  ssh_run "$MASTER" "sudo docker service ls"
+  ssh_run "$MASTER" "sudo docker service ps littlepigs_nginx --no-trunc | tail -n +1"
+  ssh_run "$MASTER" "sudo docker service ps littlepigs_frontend --no-trunc | tail -n +1"
+}
+post_hardening
+
+log "Deployment complete."
