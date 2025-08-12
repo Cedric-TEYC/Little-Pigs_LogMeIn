@@ -206,55 +206,54 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
 
-      # ---------- SEULE PARTIE AJOUTÉE / MODIFIÉE ----------
-      - name: Post-déploiement – désactiver read-only (nginx & frontend) avec attente
+      # ======= AJOUT UNIQUE ICI : patch read-only sur master, avec retries anti 'update out of sequence' =======
+      - name: Patch read-only (nginx + frontend) via admin→master (retries)
         run: |
-          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP <<'ADMIN'
-          set -e
+          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP 'bash -s' <<'ADMIN'
+          set -euo pipefail
           MASTER_IP=$(yq e '.nodes.master.ip' ~/cluster_config.yml)
           MASTER_USER=$(yq e '.nodes.master.user' ~/cluster_config.yml)
+          KEY=~/.ssh/id_ed25519_github
+          CMD='sudo docker service update --read-only=false --force'
 
-          ssh -i ~/.ssh/id_ed25519_github -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" 'bash -s' <<'MASTER'
-          set -e
-
-          wait_ready () {
+          update_service() {
             local svc="$1"
-            local end=$((SECONDS+180))
-            echo "⏳ Attente que $svc soit prêt (<=180s)..."
-            while [ $SECONDS -lt $end ]; do
-              if sudo docker service ps "$svc" --filter desired-state=running --format '{{.CurrentState}}' | grep -q '^Running '; then
-                echo "✅ $svc a au moins 1 task Running."
-                return 0
-              fi
-              sleep 3
+            local attempt=1
+            until ssh -i "$KEY" -o StrictHostKeyChecking=no "$MASTER_USER@$MASTER_IP" "$CMD $svc"; do
+              code=$?
+              echo "⚠️ update '$svc' tentative $attempt échouée (code $code). Retry dans 5s…"
+              sleep 5
+              attempt=$((attempt+1))
+              [ $attempt -le 24 ] || { echo "❌ Abandon après 24 tentatives."; exit 1; }
             done
-            echo "⚠️  Timeout en attendant $svc (on continue quand même)."
-            return 1
+            echo "✅ $svc patché (read-only=false)."
           }
 
-          try_update () {
-            local svc="$1"
-            for i in 1 2 3 4 5; do
-              if sudo docker service update --read-only=false --force "$svc"; then
-                echo "✅ read-only désactivé pour $svc"
-                return 0
-              fi
-              echo "⚠️  update out of sequence pour $svc, retry $i..."
-              sleep 2
-            done
-            echo "❌ Impossible de mettre à jour $svc après retries"
-            exit 1
-          }
-
-          wait_ready littlepigs_nginx || true
-          wait_ready littlepigs_frontend || true
-
-          try_update littlepigs_nginx
-          try_update littlepigs_frontend
-
-          echo "--- État des tasks ---"
-          sudo docker service ps littlepigs_nginx --no-trunc
-          sudo docker service ps littlepigs_frontend --no-trunc
-          MASTER
+          update_service littlepigs_nginx
+          update_service littlepigs_frontend
           ADMIN
-  # ---------- FIN MODIF ----------
+      # ======= FIN AJOUT =======
+
+  cluster_healthcheck:
+    runs-on: self-hosted
+    needs: deploy_cluster
+    env:
+      ADMIN_USER: ${{ secrets.ADMIN_USER }}
+      ADMIN_IP: ${{ secrets.ADMIN_IP }}
+      SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: webfactory/ssh-agent@v0.5.4
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Copier healthcheck.sh et cluster_config.yml sur admin
+        run: |
+          scp -o StrictHostKeyChecking=no scripts/healthcheck.sh $ADMIN_USER@$ADMIN_IP:~/
+          scp -o StrictHostKeyChecking=no cluster_config.yml $ADMIN_USER@$ADMIN_IP:~/
+      - name: Exécuter healthcheck (logs + vérifications)
+        run: |
+          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/healthcheck.sh && ~/healthcheck.sh"
+      - name: Récupérer et afficher le log du healthcheck
+        run: |
+          scp -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP:~/cluster_health.log ./cluster_health.log
+          cat ./cluster_health.log
