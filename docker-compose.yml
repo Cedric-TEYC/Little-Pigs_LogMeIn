@@ -41,7 +41,6 @@ services:
           memory: 256M
 
   frontend:
-    # Image basée sur nginx => a besoin d'écrire dans /var/cache/nginx et /var/run
     image: cedricteyc/littlepigs-frontend:latest
     deploy:
       mode: global
@@ -51,28 +50,14 @@ services:
         limits:
           cpus: "0.25"
           memory: 128M
-    user: "0:0"
-    read_only: false
-    volumes:
-      - type: tmpfs
-        target: /var/cache/nginx
-        tmpfs:
-          size: 67108864   # 64 MiB
-          mode: 1777
-      - type: tmpfs
-        target: /var/run
-        tmpfs:
-          size: 16777216   # 16 MiB
-          mode: 1777
 
   nginx:
     image: cedricteyc/littlepigs-nginx:latest
     depends_on:
       - frontend
       - backend
-    # Swarm publie le port 3000 sur tous les nœuds via le mesh ingress
     ports:
-      - "3000:80"
+      - "3000:80"    # Swarm mesh, ok
     deploy:
       mode: global
       restart_policy:
@@ -81,19 +66,6 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
-    user: "0:0"
-    read_only: false
-    volumes:
-      - type: tmpfs
-        target: /var/cache/nginx
-        tmpfs:
-          size: 67108864   # 64 MiB
-          mode: 1777
-      - type: tmpfs
-        target: /var/run
-        tmpfs:
-          size: 16777216   # 16 MiB
-          mode: 1777
 
 volumes:
   pgdata:

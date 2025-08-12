@@ -188,11 +188,13 @@ jobs:
       - uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ env.SSH_PRIVATE_KEY }}
+
       - name: Copier scripts et configs sur admin
         run: |
           scp -o StrictHostKeyChecking=no cluster_config.yml $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no docker-compose.yml $ADMIN_USER@$ADMIN_IP:~/
           scp -o StrictHostKeyChecking=no scripts/deploy_cluster.sh $ADMIN_USER@$ADMIN_IP:~/
+
       - name: Installer yq sur admin
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "\
@@ -202,21 +204,23 @@ jobs:
               sudo mv yq /usr/local/bin/yq; \
             fi \
           "
+
       - name: Lancer le script de déploiement
         run: |
           ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "chmod +x ~/deploy_cluster.sh && ~/deploy_cluster.sh"
-      - name: Vérifier accès HTTP sur master et workers
+
+      # ====== SEULE NOUVELLE ÉTAPE : applique les 2 commandes read-only=false sur le master ======
+      - name: Fix post-déploiement (read-only=false sur nginx & frontend)
         run: |
-          MASTER_IP=$(ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "yq e '.nodes.master.ip' cluster_config.yml")
-          WORKERS_IPS=($(ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "yq e '.nodes.workers[].ip' cluster_config.yml"))
-
-          echo "🔍 Test HTTP sur master..."
-          curl -s -o /dev/null -w "%{http_code}\n" http://$MASTER_IP:3000 | grep -q "^200$" && echo "✅ Master OK" || (echo "❌ Master KO" && exit 1)
-
-          for IP in "${WORKERS_IPS[@]}"; do
-            echo "🔍 Test HTTP sur worker $IP..."
-            curl -s -o /dev/null -w "%{http_code}\n" http://$IP:3000 | grep -q "^200$" && echo "✅ Worker $IP OK" || (echo "❌ Worker $IP KO" && exit 1)
-          done
+          ssh -o StrictHostKeyChecking=no $ADMIN_USER@$ADMIN_IP "\
+            MASTER_IP=\$(yq e '.nodes.master.ip' ~/cluster_config.yml); \
+            MASTER_USER=\$(yq e '.nodes.master.user' ~/cluster_config.yml); \
+            ssh -i ~/.ssh/id_ed25519_github -o StrictHostKeyChecking=no \$MASTER_USER@\$MASTER_IP '\
+              sudo docker service update --read-only=false --force littlepigs_nginx && \
+              sudo docker service update --read-only=false --force littlepigs_frontend \
+            '; \
+          "
+      # ============================================================================================
 
   cluster_healthcheck:
     runs-on: self-hosted
