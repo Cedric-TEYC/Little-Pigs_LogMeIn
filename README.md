@@ -86,7 +86,7 @@ docker compose down
 ## Déploiement automatique sur cluster  
 Le déploiement est entièrement automatisé via `deploy-cluster.sh` exécuté par le pipeline GitHub Actions.  
 Ce script :  
-- Met à jour la configuration du cluster  
+- Met à jour la configuration du cluster (les machines a integrer dans le cluster sont renseignées içi `cluster_config.yml`)
 - Relance les services avec les nouvelles images validées  
 - Exécute un healthcheck (`healthcheck.sh`) pour confirmer que tout fonctionne  
 - Génère un rapport d’état détaillé du cluster  
