@@ -1,4 +1,4 @@
-![CI/CD](https://github.com/cedricteyc/Little-Pigs_LogMeIn/actions/workflows/docker-publish.yml/badge.svg)  
+![CI/CD](https://github.com/Cedric-TEYC/Little-Pigs_LogMeIn/actions/workflows/docker-publish.yml/badge.svg?branch=main)
 [![DockerHub Backend](https://img.shields.io/docker/v/cedricteyc/littlepigs-backend?label=backend)](https://hub.docker.com/r/cedricteyc/littlepigs-backend)  
 [![DockerHub Frontend](https://img.shields.io/docker/v/cedricteyc/littlepigs-frontend?label=frontend)](https://hub.docker.com/r/cedricteyc/littlepigs-frontend)  
 
